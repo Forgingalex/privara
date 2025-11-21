@@ -1,0 +1,8 @@
+{
+  "rpcUrl": "https://sepolia.infura.io/v3/YOUR_INFURA_KEY",
+  "privateKey": "YOUR_WORKER_PRIVATE_KEY",
+  "contractAddress": "0x0000000000000000000000000000000000000000",
+  "chainId": 11155111,
+  "workerPollInterval": 5000
+}
+
