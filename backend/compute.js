@@ -12,8 +12,10 @@
  * momentum = (60*growth_score + 40*engagement_rate) / 100
  */
 
-// TODO: Import actual Zama FHE SDK for production
-// const { FHE } = require('@zama/fhevmjs');
+// NOTE: In FHEVM architecture, FHE computations happen on-chain via smart contracts
+// The backend worker listens for events and may trigger on-chain computations
+// For direct FHE operations, use @zama-fhe/relayer-sdk or interact with FHEVM contracts
+// Documentation: https://docs.zama.org/protocol/relayer-sdk-guides
 
 let fheInstance = null;
 
@@ -22,14 +24,28 @@ const SCALE = 10000;
 
 /**
  * Initialize FHE instance
+ * 
+ * NOTE: In production with FHEVM, computations should happen on-chain.
+ * This function provides a placeholder for development/testing.
+ * For production, either:
+ * 1. Use FHEVM smart contract methods that perform FHE operations on-chain
+ * 2. Use @zama-fhe/relayer-sdk for server-side FHE operations (if supported)
  */
 async function initializeFHE() {
   if (fheInstance) return fheInstance;
   
-  // TODO: Initialize actual Zama FHE SDK
-  // fheInstance = await FHE.init();
+  // TODO: For production FHEVM integration:
+  // Option 1: Use relayer SDK (if server-side operations are needed)
+  // const { createInstance } = require('@zama-fhe/relayer-sdk');
+  // fheInstance = await createInstance({ provider, chainId });
+  
+  // Option 2: Interact with FHEVM smart contract that performs computations
+  // The smart contract should have methods that accept encrypted inputs
+  // and return encrypted outputs using FHEVM's euint32/euint64 types
   
   // Placeholder initialization with integer-based operations
+  // This simulates FHE operations but does NOT provide real FHE security
+  console.warn('⚠️  Using placeholder FHE operations. For production, use FHEVM on-chain computations.');
   fheInstance = {
     // Integer-based FHE operations (all values scaled by SCALE)
     add: (a, b) => a + b, // Already integers
@@ -171,7 +187,15 @@ async function computeReputation(encryptedPayload) {
   const growth_score = growth_score_scaled * 100;        // 6500 -> 650000 (65.00 * 10000)
   
   // All computations use integer arithmetic (scaled by SCALE = 10000)
-  // In production, these would be FHE operations on encrypted values
+  // 
+  // PRODUCTION NOTE: In a real FHEVM implementation, these computations
+  // should happen on-chain via a smart contract that:
+  // 1. Accepts encrypted inputs (euint32/euint64 types from FHEVM)
+  // 2. Performs FHE operations using FHEVM library functions
+  // 3. Returns encrypted results
+  // 
+  // The backend worker would then call the smart contract's compute method
+  // instead of performing computations here.
   
   // Formula 1: authenticity = 0.4*(followers/following) + 0.3*(100 - bot_likelihood) + 0.3*(account_age_days/365 * 100)
   // All values in SCALE units (10000 = 1.0)

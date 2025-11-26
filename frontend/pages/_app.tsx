@@ -1,41 +1,32 @@
 /**
- * Next.js App Component
- * Sets up Wagmi, React Query, and ConnectKit providers
+ * Next.js App Component - Simplified for Demo
  */
 
 import type { AppProps } from 'next/app';
-import { WagmiProvider } from 'wagmi';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ConnectKitProvider, getDefaultConfig } from 'connectkit';
-import { sepolia, mainnet } from 'wagmi/chains';
+import dynamic from 'next/dynamic';
 import '../styles/globals.css';
 
-const config = getDefaultConfig({
-  // Required API Keys
-  alchemyId: process.env.NEXT_PUBLIC_ALCHEMY_ID || '',
-  walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
-  
-  // Required
-  appName: 'Privara',
-  appDescription: 'Privacy-preserving reputation layer for social identity',
-  appUrl: 'https://privara.xyz',
-  appIcon: 'https://privara.xyz/logo.png',
-  
-  // Optional
-  chains: [sepolia, mainnet],
+// Dynamically import providers to avoid SSR issues
+const Providers = dynamic(() => import('../components/Providers'), {
+  ssr: false,
+  loading: () => (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: 'white'
+    }}>
+      Loading...
+    </div>
+  ),
 });
-
-const queryClient = new QueryClient();
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <ConnectKitProvider>
-          <Component {...pageProps} />
-        </ConnectKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <Providers>
+      <Component {...pageProps} />
+    </Providers>
   );
 }
-

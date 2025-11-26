@@ -1,6 +1,6 @@
 /**
  * Twitter API integration utilities
- * Fetches minimal Twitter metrics with fallback to mocks to avoid API limits
+ * Currently using mock data - OAuth integration removed for development
  */
 
 export interface TwitterMetrics {
@@ -38,70 +38,36 @@ interface TwitterTweetData {
   created_at: string;
 }
 
-let twitterToken: string | null = null;
-let twitterUserId: string | null = null;
-const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_TWITTER_MOCKS === 'true' || true; // Default to mocks
-
 /**
- * Connect to Twitter via OAuth 2.0
- * For MVP: Simplified flow with mock token
+ * Connect to Twitter - DISABLED (using mock data)
+ * OAuth integration removed - will be restored when project is complete
  */
 export async function connectTwitter(): Promise<void> {
-  if (USE_MOCK_DATA) {
-    // Mock connection for MVP
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const mockToken = 'mock_twitter_token_' + Date.now();
-        twitterToken = mockToken;
-        twitterUserId = 'mock_user_' + Date.now();
-        localStorage.setItem('twitterToken', mockToken);
-        localStorage.setItem('twitterUserId', twitterUserId);
-        resolve();
-      }, 1000);
-    });
-  }
-
-  // TODO: Implement actual Twitter OAuth 2.0 flow
-  // Redirect to Twitter OAuth, then handle callback
-  try {
-    const response = await fetch('/api/twitter/auth', {
-      method: 'POST',
-    });
-    
-    if (!response.ok) {
-      throw new Error('Twitter authentication failed');
-    }
-    
-    const data = await response.json();
-    twitterToken = data.access_token;
-    twitterUserId = data.user_id;
-    localStorage.setItem('twitterToken', twitterToken);
-    localStorage.setItem('twitterUserId', twitterUserId);
-  } catch (error) {
-    console.error('Twitter connection failed:', error);
-    throw error;
-  }
+  // OAuth removed - using mock data instead
+  console.log('Twitter OAuth disabled - using mock data');
+  return Promise.resolve();
 }
 
 /**
- * Fetch user data from Twitter API v2
+ * Fetch user data from Twitter API v2 using Privy access token
  */
-async function fetchTwitterUserData(userId?: string): Promise<TwitterUserData | null> {
-  if (USE_MOCK_DATA || !twitterToken) {
-    return null;
-  }
-
+async function fetchTwitterUserData(
+  accessToken: string,
+  userId?: string
+): Promise<TwitterUserData | null> {
   try {
-    const id = userId || twitterUserId || 'me';
+    const id = userId || 'me';
     const url = `https://api.twitter.com/2/users/${id}?user.fields=public_metrics,created_at`;
     
     const response = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${twitterToken}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Twitter API error:', response.status, errorText);
       throw new Error(`Twitter API error: ${response.status}`);
     }
 
@@ -116,21 +82,23 @@ async function fetchTwitterUserData(userId?: string): Promise<TwitterUserData | 
 /**
  * Fetch recent tweets for engagement calculation
  */
-async function fetchRecentTweets(count: number = 10): Promise<TwitterTweetData[]> {
-  if (USE_MOCK_DATA || !twitterToken || !twitterUserId) {
-    return [];
-  }
-
+async function fetchRecentTweets(
+  accessToken: string,
+  userId: string,
+  count: number = 10
+): Promise<TwitterTweetData[]> {
   try {
-    const url = `https://api.twitter.com/2/users/${twitterUserId}/tweets?max_results=${count}&tweet.fields=public_metrics,created_at`;
+    const url = `https://api.twitter.com/2/users/${userId}/tweets?max_results=${count}&tweet.fields=public_metrics,created_at`;
     
     const response = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${twitterToken}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Twitter API error:', response.status, errorText);
       throw new Error(`Twitter API error: ${response.status}`);
     }
 
@@ -184,7 +152,6 @@ function estimateBotLikelihood(
   tweetCount: number,
   accountAgeDays: number
 ): number {
-  // Simple heuristic-based bot detection
   let botScore = 0;
 
   // High following/follower ratio suggests bot
@@ -278,63 +245,35 @@ function calculateGrowthScore(
 }
 
 /**
- * Generate mock Twitter metrics
- * Used when API is unavailable or to avoid rate limits
+ * Fetch Twitter metrics using Privy access token
+ * This fetches REAL data from Twitter API - no mocks!
  */
-function generateMockMetrics(): TwitterMetrics {
-  // Generate realistic mock data
-  const followerCount = Math.floor(Math.random() * 5000) + 500;
-  const followingCount = Math.floor(Math.random() * 1000) + 100;
-  const accountAgeDays = Math.floor(Math.random() * 2000) + 365;
-  const tweetCount = Math.floor(Math.random() * 5000) + 100;
-  
-  const engagementRate = Math.random() * 5 + 1; // 1-6%
-  const botLikelihood = estimateBotLikelihood(followerCount, followingCount, tweetCount, accountAgeDays);
-  const postingFrequency = calculatePostingFrequency(tweetCount, accountAgeDays);
-  const followerQuality = estimateFollowerQuality(followerCount, followingCount, engagementRate);
-  const growthScore = calculateGrowthScore(followerCount, accountAgeDays, engagementRate);
-
-  return {
-    follower_count: followerCount,
-    following_count: followingCount,
-    engagement_rate: Math.round(engagementRate * 100) / 100,
-    account_age_days: accountAgeDays,
-    bot_likelihood: Math.round(botLikelihood * 100) / 100,
-    posting_frequency: Math.round(postingFrequency * 1000) / 1000,
-    follower_quality: Math.round(followerQuality * 100) / 100,
-    growth_score: Math.round(growthScore * 100) / 100,
-  };
-}
-
-/**
- * Fetch Twitter metrics
- * Uses real API when available, falls back to mocks to avoid API limits
- */
-export async function fetchTwitterMetrics(): Promise<TwitterMetrics> {
-  const token = localStorage.getItem('twitterToken') || twitterToken;
-  const userId = localStorage.getItem('twitterUserId') || twitterUserId;
-  
-  if (!token) {
+export async function fetchTwitterMetrics(
+  accessToken: string,
+  userId: string
+): Promise<TwitterMetrics> {
+  if (!accessToken || !userId) {
     throw new Error('Twitter not connected. Please connect Twitter first.');
   }
 
-  // Use mock data if configured or if API fails
-  if (USE_MOCK_DATA) {
-    console.log('Using mock Twitter metrics (to avoid API limits)');
-    return generateMockMetrics();
-  }
-
   try {
+    console.log('🔍 Fetching REAL Twitter metrics from API...');
+    
     // Fetch user data
-    const userData = await fetchTwitterUserData(userId || undefined);
+    const userData = await fetchTwitterUserData(accessToken, userId);
     
     if (!userData) {
-      console.warn('Failed to fetch user data, using mocks');
-      return generateMockMetrics();
+      throw new Error('Failed to fetch Twitter user data');
     }
 
+    console.log('✅ User data fetched:', {
+      username: userData.username,
+      followers: userData.public_metrics.followers_count,
+    });
+
     // Fetch recent tweets for engagement calculation
-    const tweets = await fetchRecentTweets(10);
+    const tweets = await fetchRecentTweets(accessToken, userId, 10);
+    console.log(`✅ Fetched ${tweets.length} recent tweets`);
 
     // Calculate metrics
     const followerCount = userData.public_metrics.followers_count;
@@ -344,7 +283,7 @@ export async function fetchTwitterMetrics(): Promise<TwitterMetrics> {
     
     const engagementRate = tweets.length > 0 
       ? calculateEngagementRate(tweets, followerCount)
-      : Math.random() * 5 + 1; // Fallback if no tweets
+      : 0; // No fallback - use real data or 0
     
     const botLikelihood = estimateBotLikelihood(
       followerCount,
@@ -365,7 +304,7 @@ export async function fetchTwitterMetrics(): Promise<TwitterMetrics> {
       engagementRate
     );
 
-    return {
+    const metrics = {
       follower_count: followerCount,
       following_count: followingCount,
       engagement_rate: Math.round(engagementRate * 100) / 100,
@@ -375,27 +314,128 @@ export async function fetchTwitterMetrics(): Promise<TwitterMetrics> {
       follower_quality: Math.round(followerQuality * 100) / 100,
       growth_score: Math.round(growthScore * 100) / 100,
     };
+
+    console.log('✅ Real Twitter metrics calculated:', metrics);
+    return metrics;
   } catch (error) {
-    console.error('Error fetching Twitter metrics:', error);
-    console.warn('Falling back to mock data');
-    return generateMockMetrics();
+    console.error('❌ Error fetching Twitter metrics:', error);
+    throw error;
   }
 }
 
 /**
- * Check if Twitter is connected
+ * Check if Twitter is connected via Privy
  */
-export function isTwitterConnected(): boolean {
-  return !!localStorage.getItem('twitterToken');
+export function isTwitterConnected(user: any): boolean {
+  return user?.twitter !== undefined && user?.twitter !== null;
 }
 
 /**
- * Disconnect Twitter
+ * Get Twitter access token from Privy user
+ * Privy stores OAuth tokens in linkedAccounts when "Return OAuth tokens" is enabled
  */
-export function disconnectTwitter(): void {
-  twitterToken = null;
-  twitterUserId = null;
-  localStorage.removeItem('twitterToken');
-  localStorage.removeItem('twitterUserId');
+export function getTwitterAccessToken(user: any): string | null {
+  if (!user) return null;
+  
+  // Check linkedAccounts array
+  if (user.linkedAccounts && Array.isArray(user.linkedAccounts)) {
+    const twitterAccount = user.linkedAccounts.find(
+      (account: any) => account.type === 'twitter' || account.provider === 'twitter'
+    );
+    
+    // Try different possible property names
+    return twitterAccount?.oauthAccessToken || 
+           twitterAccount?.accessToken || 
+           twitterAccount?.token ||
+           null;
+  }
+  
+  // Fallback: check if Twitter is directly on user object
+  if (user.twitter) {
+    return user.twitter.oauthAccessToken || 
+           user.twitter.accessToken || 
+           null;
+  }
+  
+  return null;
+}
+
+/**
+ * Get Twitter user ID from Privy user
+ */
+export function getTwitterUserId(user: any): string | null {
+  if (!user) return null;
+  
+  // Check linkedAccounts array
+  if (user.linkedAccounts && Array.isArray(user.linkedAccounts)) {
+    const twitterAccount = user.linkedAccounts.find(
+      (account: any) => account.type === 'twitter' || account.provider === 'twitter'
+    );
+    
+    return twitterAccount?.subject || 
+           twitterAccount?.userId || 
+           twitterAccount?.id ||
+           null;
+  }
+  
+  // Fallback: check if Twitter is directly on user object
+  if (user.twitter) {
+    return user.twitter.subject || 
+           user.twitter.userId || 
+           user.twitter.id ||
+           null;
+  }
+  
+  return null;
+}
+
+/**
+ * Get Twitter username from Privy user
+ */
+export function getTwitterUsername(user: any): string | null {
+  if (user?.linkedAccounts) {
+    const twitterAccount = user.linkedAccounts.find(
+      (account: any) => account.type === 'twitter'
+    );
+    return twitterAccount?.username || null;
+  }
+  return null;
+}
+
+/**
+ * Generate mock Twitter metrics for development
+ * Use this when Twitter OAuth is not configured yet
+ */
+export function generateMockTwitterMetrics(): TwitterMetrics {
+  // Generate realistic-looking mock data
+  const followerCount = Math.floor(Math.random() * 50000) + 1000; // 1k-51k followers
+  const followingCount = Math.floor(followerCount * (0.3 + Math.random() * 0.4)); // 30-70% of followers
+  const accountAgeDays = Math.floor(Math.random() * 2000) + 100; // 100-2100 days old
+  const tweetCount = Math.floor(accountAgeDays * (0.5 + Math.random() * 2)); // Variable posting frequency
+  
+  // Calculate realistic engagement rate (0.5% - 5%)
+  const engagementRate = 0.5 + Math.random() * 4.5;
+  
+  // Calculate bot likelihood based on metrics
+  const followingRatio = followerCount / (followingCount || 1);
+  let botLikelihood = 0;
+  if (followingRatio < 0.1) botLikelihood = 30;
+  else if (followingRatio < 0.5) botLikelihood = 15;
+  if (accountAgeDays < 30 && followerCount > 1000) botLikelihood += 25;
+  
+  const postingFrequency = Math.min(1, tweetCount / (accountAgeDays * 2));
+  const followerQuality = followingRatio > 2 ? 70 : followingRatio > 1 ? 60 : 50;
+  const growthScore = followerCount / accountAgeDays > 10 ? 80 : followerCount / accountAgeDays > 5 ? 70 : 60;
+  
+  return {
+    follower_count: followerCount,
+    following_count: followingCount,
+    engagement_rate: Math.round(engagementRate * 100) / 100,
+    account_age_days: accountAgeDays,
+    bot_likelihood: Math.round(botLikelihood * 100) / 100,
+    posting_frequency: Math.round(postingFrequency * 1000) / 1000,
+    follower_quality: Math.round(followerQuality * 100) / 100,
+    growth_score: Math.round(growthScore * 100) / 100,
+  };
 }
 

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useRouter } from 'next/router';
-import { encryptMetrics, validateMetrics, TwitterMetrics } from '../utils/encryption';
-import { fetchTwitterMetrics } from '../utils/twitter';
+import { encryptMetrics, validateMetrics, TwitterMetrics, initializeFHE, isRealFHE } from '../utils/encryption';
+import { generateMockTwitterMetrics } from '../utils/twitter';
 import Link from 'next/link';
 
 export default function EncryptPage() {
@@ -12,28 +12,47 @@ export default function EncryptPage() {
   const [encryptedData, setEncryptedData] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fheReady, setFheReady] = useState(false);
+  const [isRealEncryption, setIsRealEncryption] = useState(false);
 
   useEffect(() => {
     if (!isConnected) {
       router.push('/');
       return;
     }
-    loadMetrics();
-  }, [isConnected, router]);
-
-  const loadMetrics = async () => {
-    try {
-      const data = await fetchTwitterMetrics();
-      if (!validateMetrics(data)) {
-        setError('Invalid metrics data');
-        return;
-      }
-      setMetrics(data);
-    } catch (error) {
-      console.error('Failed to load metrics:', error);
-      setError('Failed to load Twitter metrics');
+    
+    const isTwitterConnected = typeof window !== 'undefined' && localStorage.getItem('twitterMockConnected') === 'true';
+    if (!isTwitterConnected) {
+      setError('Please connect Twitter first on the home page');
+      return;
     }
-  };
+
+    const initialize = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // Initialize FHE SDK
+        await initializeFHE();
+        setFheReady(true);
+        setIsRealEncryption(isRealFHE());
+        
+        // Load metrics
+        const data = generateMockTwitterMetrics();
+        if (!validateMetrics(data)) {
+          setError('Invalid metrics data');
+          return;
+        }
+        setMetrics(data);
+      } catch (err: any) {
+        setError(`Failed to initialize: ${err.message || 'Unknown error'}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initialize();
+  }, [isConnected, router]);
 
   const handleEncrypt = async () => {
     if (!metrics || !address) return;
@@ -42,105 +61,124 @@ export default function EncryptPage() {
     setError(null);
     
     try {
-      // Pass user address for FHE encryption
-      const encrypted = await encryptMetrics(metrics, address);
-      setEncryptedData(encrypted);
-      localStorage.setItem('encryptedPayload', encrypted);
-    } catch (error: any) {
-      console.error('Encryption failed:', error);
-      setError(error.message || 'Encryption failed');
+      const result = await encryptMetrics(metrics, address);
+      setEncryptedData(result.hexPayload);
+      
+      // Store encrypted data for contract submission
+      localStorage.setItem('encryptedPayload', result.hexPayload);
+      localStorage.setItem('encryptedHandles', JSON.stringify(
+        result.handles.map(h => Array.from(h))
+      ));
+      localStorage.setItem('encryptedProof', JSON.stringify(
+        Array.from(result.inputProof)
+      ));
+      
+      console.log('✅ Encryption complete');
+      console.log('   Real FHE:', isRealEncryption);
+      console.log('   Payload size:', result.hexPayload.length, 'chars');
+    } catch (err: any) {
+      setError(err.message || 'Encryption failed');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!metrics) {
+  if (loading || !metrics) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-white">Loading metrics...</div>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <div style={{ marginBottom: '1rem' }}>{loading ? 'Loading...' : 'Preparing...'}</div>
+          {error && <div style={{ color: '#ff6b6b', padding: '1rem', background: 'rgba(255,0,0,0.1)', borderRadius: '8px' }}>{error}</div>}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-bold text-white mb-8 text-center">Encrypt Metrics</h1>
-
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 mb-6">
-            <h2 className="text-2xl font-semibold text-white mb-4">Your Twitter Metrics</h2>
-            <div className="grid grid-cols-2 gap-4 text-white">
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Followers</div>
-                <div className="text-2xl font-bold">{metrics.follower_count.toLocaleString()}</div>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Following</div>
-                <div className="text-2xl font-bold">{metrics.following_count.toLocaleString()}</div>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Engagement Rate</div>
-                <div className="text-2xl font-bold">{metrics.engagement_rate.toFixed(2)}%</div>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Account Age</div>
-                <div className="text-2xl font-bold">{metrics.account_age_days} days</div>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Bot Likelihood</div>
-                <div className="text-2xl font-bold">{metrics.bot_likelihood.toFixed(1)}%</div>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Posting Frequency</div>
-                <div className="text-2xl font-bold">{(metrics.posting_frequency * 100).toFixed(1)}%</div>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Follower Quality</div>
-                <div className="text-2xl font-bold">{metrics.follower_quality.toFixed(1)}</div>
-              </div>
-              <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-sm text-gray-300">Growth Score</div>
-                <div className="text-2xl font-bold">{metrics.growth_score.toFixed(1)}</div>
-              </div>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)', padding: '2rem' }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto', paddingTop: '4rem' }}>
+        <h1 style={{ color: 'white', fontSize: '2rem', marginBottom: '0.5rem', textAlign: 'center' }}>Encrypt Metrics</h1>
+        <p style={{ color: isRealEncryption ? '#22c55e' : '#fbbf24', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
+          {isRealEncryption ? '🔐 Using Zama FHE (Real Encryption)' : '⚠️ Using Mock Encryption (Demo Mode)'}
+        </p>
+        
+        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>
+          <h2 style={{ color: 'white', marginBottom: '1rem' }}>Your Twitter Metrics</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', color: 'white' }}>
+              <div style={{ fontSize: '0.875rem', color: '#ccc' }}>Followers</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{metrics.follower_count.toLocaleString()}</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', color: 'white' }}>
+              <div style={{ fontSize: '0.875rem', color: '#ccc' }}>Following</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{metrics.following_count.toLocaleString()}</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', color: 'white' }}>
+              <div style={{ fontSize: '0.875rem', color: '#ccc' }}>Engagement Rate</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{metrics.engagement_rate.toFixed(2)}%</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', color: 'white' }}>
+              <div style={{ fontSize: '0.875rem', color: '#ccc' }}>Account Age</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{metrics.account_age_days} days</div>
             </div>
           </div>
+        </div>
 
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8">
-            {error && (
-              <div className="mb-4 p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-200">
-                {error}
+        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem' }}>
+          {error && (
+            <div style={{ color: '#ff6b6b', padding: '1rem', background: 'rgba(255,0,0,0.1)', borderRadius: '8px', marginBottom: '1rem' }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleEncrypt}
+            disabled={loading || !!encryptedData}
+            style={{
+              width: '100%',
+              background: encryptedData ? '#6b7280' : '#FEDA15',
+              color: '#000',
+              borderRadius: '9999px',
+              fontWeight: 'bold',
+              padding: '14px 32px',
+              fontSize: '16px',
+              border: 'none',
+              cursor: encryptedData ? 'not-allowed' : 'pointer',
+              marginBottom: '1rem'
+            }}
+          >
+            {loading ? 'Encrypting...' : encryptedData ? '✓ Done' : 'Encrypt Metrics'}
+          </button>
+
+          {encryptedData && (
+            <div>
+              <p style={{ color: 'white', marginBottom: '0.5rem' }}>✓ Encryption Complete</p>
+              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                <p style={{ fontSize: '0.75rem', color: '#ccc', wordBreak: 'break-all' }}>
+                  {encryptedData.slice(0, 100)}...
+                </p>
               </div>
-            )}
-
-            <button
-              onClick={handleEncrypt}
-              disabled={loading || !!encryptedData}
-              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition mb-6"
-            >
-              {loading ? 'Encrypting...' : encryptedData ? '✓ Encryption Complete' : 'Encrypt Metrics'}
-            </button>
-
-            {encryptedData && (
-              <div className="mt-6">
-                <p className="text-white mb-2 font-semibold">✓ Encryption Complete</p>
-                <div className="bg-black/20 p-4 rounded-lg mb-4">
-                  <p className="text-xs text-gray-300 break-all font-mono">
-                    {encryptedData.slice(0, 100)}...
-                  </p>
-                </div>
-                <Link
-                  href="/submit"
-                  className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition text-center"
-                >
-                  Submit to Contract →
-                </Link>
-              </div>
-            )}
-          </div>
+              <Link
+                href="/submit"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  background: 'white',
+                  color: '#000',
+                  borderRadius: '9999px',
+                  fontWeight: 'bold',
+                  padding: '14px 32px',
+                  fontSize: '16px',
+                  textAlign: 'center',
+                  textDecoration: 'none'
+                }}
+              >
+                Submit to Contract →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-
