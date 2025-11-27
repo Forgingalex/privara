@@ -34,12 +34,12 @@ const nextConfig = {
     
     // Configure WASM support for Zama FHE SDK (only on client side)
     if (!isServer) {
-      // Prevent webpack from trying to resolve global/globalThis as modules
-      // These are global variables, not modules
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        global: false,
-        globalThis: false,
+      // Provide polyfill modules for global and globalThis
+      // Some packages try to import these as modules, so we provide stubs
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        global: require.resolve('./polyfills/global.js'),
+        globalThis: require.resolve('./polyfills/globalThis.js'),
       };
       
       config.experiments = {
