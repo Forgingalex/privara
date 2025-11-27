@@ -3,21 +3,17 @@
  * Uses Zama FHE relayer SDK for real homomorphic encryption
  */
 
-// Polyfill global variable BEFORE any SDK imports
-// This must run immediately when this module loads
+// Ensure global is defined (should already be set by _document.tsx, but double-check)
 if (typeof window !== 'undefined') {
-  // @ts-ignore - global is not defined in browser, we're adding it
+  // @ts-ignore - global is not defined in browser by default
   if (typeof global === 'undefined') {
     // @ts-ignore
     const g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
-    
-    // Use Function constructor to define global in non-strict context
-    // This creates a true top-level global variable
     try {
       // @ts-ignore
       (new Function('g', 'global = g'))(g);
     } catch (e) {
-      // Fallback: use Object.defineProperty on globalThis
+      // Fallback
       try {
         // @ts-ignore
         Object.defineProperty(g, 'global', {
@@ -27,13 +23,10 @@ if (typeof window !== 'undefined') {
           configurable: true,
         });
       } catch (e2) {
-        // Final fallback: just set window.global
         // @ts-ignore
         window.global = g;
       }
     }
-    
-    // Also set window.global for compatibility
     // @ts-ignore
     if (typeof window !== 'undefined' && !window.global) {
       // @ts-ignore
