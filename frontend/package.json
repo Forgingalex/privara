@@ -17,8 +17,7 @@
     "viem": "^2.0.0",
     "@wagmi/core": "^2.0.0",
     "connectkit": "^1.5.0",
-    "ethers": "^6.8.0",
-    "@fhenix/fhevmjs": "^0.1.0"
+    "ethers": "^6.8.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
