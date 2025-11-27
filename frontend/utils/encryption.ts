@@ -51,6 +51,7 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
     
     try {
       // Dynamic import for browser environment
+      // @ts-ignore - SDK may not be available, fallback to mock if import fails
       const { createInstance, SepoliaConfig } = await import('@zama-fhe/relayer-sdk/web');
       
       // Create FHE instance with Sepolia config
