@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { parseHexPayload } from '../utils/encryption';
 
-// Privara Contract ABI (minimal - just submitMetrics)
+// Privara Contract ABI (includes hasUserSubmitted check)
 const PRIVARA_ABI = [
   {
     name: 'submitMetrics',
@@ -22,6 +22,17 @@ const PRIVARA_ABI = [
     stateMutability: 'nonpayable',
     inputs: [],
     outputs: []
+  },
+  {
+    name: 'hasUserSubmitted',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'user', type: 'address' }
+    ],
+    outputs: [
+      { name: '', type: 'bool' }
+    ]
   }
 ] as const;
 
@@ -35,22 +46,57 @@ export default function SubmitPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [txFailed, setTxFailed] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [step, setStep] = useState<'submit' | 'compute'>('submit');
+  const [checkingSubmission, setCheckingSubmission] = useState(false);
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}` | undefined;
   const isRealContract = contractAddress && contractAddress !== '0x0000000000000000000000000000000000000001';
 
-  // Contract write hooks
-  const { writeContract: submitMetrics, data: submitTxHash, isPending: isSubmitPending } = useWriteContract();
-  const { writeContract: computeReputation, data: computeTxHash, isPending: isComputePending } = useWriteContract();
+  // Contract write hooks with error handling
+  const { 
+    writeContract: submitMetrics, 
+    data: submitTxHash, 
+    isPending: isSubmitPending,
+    error: submitError,
+    reset: resetSubmit
+  } = useWriteContract();
+  const { 
+    writeContract: computeReputation, 
+    data: computeTxHash, 
+    isPending: isComputePending,
+    error: computeError,
+    reset: resetCompute
+  } = useWriteContract();
   
-  // Transaction receipt hooks
-  const { isLoading: isSubmitConfirming, isSuccess: isSubmitConfirmed } = useWaitForTransactionReceipt({
+  // Transaction receipt hooks with error handling
+  const { 
+    isLoading: isSubmitConfirming, 
+    isSuccess: isSubmitConfirmed,
+    isError: isSubmitReceiptError,
+    error: submitReceiptError
+  } = useWaitForTransactionReceipt({
     hash: submitTxHash,
   });
-  const { isLoading: isComputeConfirming, isSuccess: isComputeConfirmed } = useWaitForTransactionReceipt({
+  const { 
+    isLoading: isComputeConfirming, 
+    isSuccess: isComputeConfirmed,
+    isError: isComputeReceiptError,
+    error: computeReceiptError
+  } = useWaitForTransactionReceipt({
     hash: computeTxHash,
+  });
+
+  // Check if user has already submitted
+  const { data: hasSubmitted, refetch: checkSubmission } = useReadContract({
+    address: contractAddress,
+    abi: PRIVARA_ABI,
+    functionName: 'hasUserSubmitted',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!contractAddress && !!address && isConnected && !isDemoMode,
+    },
   });
 
   useEffect(() => {
@@ -97,14 +143,89 @@ export default function SubmitPage() {
     setIsDemoMode(!isRealContract);
   }, [isConnected, router, isRealContract]);
 
+  // Check submission status when address or contract changes
+  useEffect(() => {
+    if (isConnected && address && contractAddress && !isDemoMode) {
+      setCheckingSubmission(true);
+      checkSubmission?.().then((result) => {
+        setCheckingSubmission(false);
+        if (result.data === true) {
+          setError('You have already submitted metrics with this wallet address. Each address can only submit once.');
+        }
+      }).catch(() => {
+        setCheckingSubmission(false);
+      });
+    }
+  }, [address, contractAddress, isConnected, isDemoMode, checkSubmission]);
+
+  // Handle transaction write errors
+  useEffect(() => {
+    if (submitError) {
+      console.error('❌ Transaction submission error:', submitError);
+      setError(`Transaction failed: ${submitError.message || 'Failed to submit transaction'}`);
+      setTxFailed(true);
+      setIsSubmitting(false);
+    }
+  }, [submitError]);
+
+  useEffect(() => {
+    if (computeError) {
+      console.error('❌ Compute transaction error:', computeError);
+      setError(`Compute failed: ${computeError.message || 'Failed to compute reputation'}`);
+      setTxFailed(true);
+      setIsSubmitting(false);
+    }
+  }, [computeError]);
+
+  // Handle transaction receipt errors (transaction reverted)
+  useEffect(() => {
+    if (isSubmitReceiptError && submitTxHash) {
+      console.error('❌ Transaction receipt error:', submitReceiptError);
+      const errorMsg = submitReceiptError?.message || 'Transaction reverted or failed';
+      
+      // Try to extract revert reason
+      let displayError = 'Transaction failed on blockchain';
+      if (errorMsg.includes('Already submitted') || errorMsg.includes('already')) {
+        displayError = 'You have already submitted metrics. Each wallet address can only submit once.';
+      } else if (errorMsg.includes('revert')) {
+        displayError = 'Transaction was reverted. This might mean invalid data format or you already submitted.';
+      }
+      
+      setError(displayError);
+      setTxFailed(true);
+      setIsSubmitting(false);
+    }
+  }, [isSubmitReceiptError, submitReceiptError, submitTxHash]);
+
+  useEffect(() => {
+    if (isComputeReceiptError && computeTxHash) {
+      console.error('❌ Compute receipt error:', computeReceiptError);
+      setError(`Compute transaction failed: ${computeReceiptError?.message || 'Transaction reverted'}`);
+      setTxFailed(true);
+      setIsSubmitting(false);
+    }
+  }, [isComputeReceiptError, computeReceiptError, computeTxHash]);
+
+  // Reset submitting state when tx hash is received
+  useEffect(() => {
+    if (submitTxHash && !txFailed) {
+      console.log('📝 Transaction hash received:', submitTxHash);
+      setIsSubmitting(false); // Reset submitting, now waiting for confirmation
+      setTxHash(submitTxHash);
+    }
+  }, [submitTxHash, txFailed]);
+
   // Handle submit confirmation
   useEffect(() => {
     if (isSubmitConfirmed && step === 'submit') {
       console.log('✅ Metrics submitted successfully');
       setStep('compute');
       // Automatically trigger compute
-      handleCompute();
+      if (isRealContract && contractAddress) {
+        handleCompute();
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSubmitConfirmed, step]);
 
   // Handle compute confirmation
@@ -135,8 +256,29 @@ export default function SubmitPage() {
   const handleSubmit = async () => {
     if (!encryptedPayload || !address) return;
 
-    setIsSubmitting(true);
+    // Reset error and failed states
     setError(null);
+    setTxFailed(false);
+    resetSubmit?.();
+    resetCompute?.();
+
+    // Check if user has already submitted (for real contract only)
+    if (!isDemoMode && contractAddress) {
+      setCheckingSubmission(true);
+      try {
+        const result = await checkSubmission?.();
+        if (result?.data === true) {
+          setError('You have already submitted metrics with this wallet address. Each address can only submit once.');
+          setCheckingSubmission(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not check submission status:', err);
+      }
+      setCheckingSubmission(false);
+    }
+
+    setIsSubmitting(true);
 
     if (isDemoMode) {
       // Demo mode: Simulate blockchain submission
@@ -170,15 +312,25 @@ export default function SubmitPage() {
         handlesBytes32.push('0x' + '00'.repeat(32) as `0x${string}`);
       }
 
-      submitMetrics({
-        address: contractAddress,
-        abi: PRIVARA_ABI,
-        functionName: 'submitMetrics',
-        args: [
-          handlesBytes32.slice(0, 8) as [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`],
-          ('0x' + Array.from(inputProof).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`
-        ],
-      });
+      submitMetrics(
+        {
+          address: contractAddress,
+          abi: PRIVARA_ABI,
+          functionName: 'submitMetrics',
+          args: [
+            handlesBytes32.slice(0, 8) as [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`],
+            ('0x' + Array.from(inputProof).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`
+          ],
+        },
+        {
+          onError: (error) => {
+            console.error('Transaction error:', error);
+            setError(`Transaction failed: ${error.message || 'Unknown error'}`);
+            setTxFailed(true);
+            setIsSubmitting(false);
+          },
+        }
+      );
       
     } catch (err: any) {
       console.error('Submit failed:', err);
@@ -326,35 +478,62 @@ export default function SubmitPage() {
           {/* Submit Button */}
           <button
             onClick={handleSubmit}
-            disabled={isProcessing || isSuccess}
+            disabled={isProcessing || isSuccess || checkingSubmission || hasSubmitted === true}
             style={{
               width: '100%',
-              background: isSuccess ? '#22c55e' : '#FEDA15',
-              color: '#000',
+              background: isSuccess ? '#22c55e' : txFailed ? '#ef4444' : '#FEDA15',
+              color: isSuccess || txFailed ? '#fff' : '#000',
               borderRadius: '9999px',
               fontWeight: 'bold',
               padding: '14px 32px',
               fontSize: '16px',
               border: 'none',
-              cursor: isProcessing || isSuccess ? 'not-allowed' : 'pointer',
-              opacity: isProcessing ? 0.7 : 1,
+              cursor: (isProcessing || isSuccess || checkingSubmission || hasSubmitted === true) ? 'not-allowed' : 'pointer',
+              opacity: (isProcessing || checkingSubmission) ? 0.7 : 1,
               marginBottom: '1rem'
             }}
           >
-            {isProcessing 
-              ? (isComputePending || isComputeConfirming ? '⏳ Computing...' : '⏳ Submitting...') 
-              : isSuccess 
-                ? '✓ Submitted Successfully' 
-                : 'Submit to Smart Contract'
+            {checkingSubmission
+              ? '⏳ Checking submission status...'
+              : hasSubmitted === true
+                ? '✓ Already Submitted'
+                : txFailed 
+                  ? '❌ Transaction Failed - Click to Retry'
+                  : isProcessing 
+                    ? (isComputePending || isComputeConfirming ? '⏳ Computing...' : '⏳ Submitting...') 
+                    : isSuccess 
+                      ? '✓ Submitted Successfully' 
+                      : 'Submit to Smart Contract'
             }
           </button>
 
           {/* Transaction Hash */}
-          {(submitTxHash || txHash) && (
+          {(submitTxHash || txHash) && !txFailed && (
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
               <p style={{ color: '#aaa', fontSize: '0.875rem', marginBottom: '0.5rem' }}>Transaction Hash:</p>
               <code style={{ fontSize: '0.75rem', color: 'white', wordBreak: 'break-all' }}>
                 {submitTxHash || txHash}
+              </code>
+              {!isDemoMode && submitTxHash && (
+                <a 
+                  href={`https://sepolia.etherscan.io/tx/${submitTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'block', color: '#FEDA15', fontSize: '0.75rem', marginTop: '0.5rem' }}
+                >
+                  View on Etherscan ↗
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Failed Transaction Details */}
+          {txFailed && submitTxHash && (
+            <div style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+              <p style={{ color: '#ef4444', fontWeight: 'bold', marginBottom: '0.5rem' }}>❌ Transaction Failed</p>
+              <p style={{ color: '#aaa', fontSize: '0.875rem', marginBottom: '0.5rem' }}>Transaction Hash:</p>
+              <code style={{ fontSize: '0.75rem', color: 'white', wordBreak: 'break-all' }}>
+                {submitTxHash}
               </code>
               {!isDemoMode && submitTxHash && (
                 <a 

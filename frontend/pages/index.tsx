@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useAccount, useConnect } from 'wagmi';
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { 
   generateMockTwitterMetrics
@@ -12,6 +12,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const { address, isConnected, isConnecting } = useAccount();
   const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
   const { user, authenticated, ready, login, connectWallet } = usePrivy();
 
   // Memoize wallet address to prevent infinite loops - use stable reference
@@ -228,6 +229,25 @@ export default function Home() {
     }
   };
 
+  const handleWalletDisconnect = async () => {
+    try {
+      console.log('🔌 Disconnecting wallet...');
+      
+      // Disconnect from wagmi
+      if (isConnected) {
+        disconnect();
+      }
+      
+      // Clear any local state
+      setLoading(false);
+      loadingClearedRef.current = false;
+      
+      console.log('✅ Wallet disconnected');
+    } catch (error: any) {
+      console.error('Disconnect error:', error);
+    }
+  };
+
   const canProceed = twitterConnected && walletConnected && metrics;
 
   return (
@@ -306,48 +326,100 @@ export default function Home() {
               }}
             >
               {/* Wallet Button - FIRST */}
-              <button
-                onClick={handleWalletConnect}
-                disabled={walletConnected}
-                className="capsule-button-wallet"
-                style={{
-                  background: 'white',
-                  color: '#000000',
-                  borderRadius: '9999px',
-                  fontWeight: 'bold',
-                  padding: '14px 32px',
-                  fontSize: '16px',
-                  border: 'none',
-                  cursor: walletConnected ? 'not-allowed' : 'pointer',
-                  opacity: walletConnected ? 0.5 : 1,
-                  transition: 'all 0.3s ease',
-                  width: '100%',
-                }}
-                onMouseEnter={(e) => {
-                  if (!walletConnected) {
-                    e.currentTarget.style.background = '#f3f3f3';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!walletConnected) {
-                    e.currentTarget.style.background = 'white';
-                  }
-                }}
-              >
-                {(loading || isConnecting) && !walletConnected ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <span style={{ animation: 'spin 1s linear infinite' }}>⟳</span>
-                    Connecting...
-                  </span>
-                ) : walletConnected ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              {walletConnected ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '12px',
+                    alignItems: 'center',
+                    width: '100%',
+                  }}
+                >
+                  {/* Wallet Status Display */}
+                  <div
+                    className="capsule-button-wallet"
+                    style={{
+                      background: 'white',
+                      color: '#000000',
+                      borderRadius: '9999px',
+                      fontWeight: 'bold',
+                      padding: '14px 32px',
+                      fontSize: '16px',
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
+                  >
                     <span>✓</span>
-                    Wallet: {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
-                  </span>
-                ) : (
-                  'Connect Wallet'
-                )}
-              </button>
+                    <span>Wallet: {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</span>
+                  </div>
+
+                  {/* Disconnect Button */}
+                  <button
+                    onClick={handleWalletDisconnect}
+                    style={{
+                      background: '#ef4444',
+                      color: '#ffffff',
+                      borderRadius: '9999px',
+                      fontWeight: 'bold',
+                      padding: '14px 24px',
+                      fontSize: '16px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#dc2626';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#ef4444';
+                    }}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleWalletConnect}
+                  disabled={walletConnected}
+                  className="capsule-button-wallet"
+                  style={{
+                    background: 'white',
+                    color: '#000000',
+                    borderRadius: '9999px',
+                    fontWeight: 'bold',
+                    padding: '14px 32px',
+                    fontSize: '16px',
+                    border: 'none',
+                    cursor: walletConnected ? 'not-allowed' : 'pointer',
+                    opacity: walletConnected ? 0.5 : 1,
+                    transition: 'all 0.3s ease',
+                    width: '100%',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!walletConnected) {
+                      e.currentTarget.style.background = '#f3f3f3';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!walletConnected) {
+                      e.currentTarget.style.background = 'white';
+                    }
+                  }}
+                >
+                  {(loading || isConnecting) && !walletConnected ? (
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <span style={{ animation: 'spin 1s linear infinite' }}>⟳</span>
+                      Connecting...
+                    </span>
+                  ) : (
+                    'Connect Wallet'
+                  )}
+                </button>
+              )}
 
               {/* Twitter Button - SECOND */}
               <button
