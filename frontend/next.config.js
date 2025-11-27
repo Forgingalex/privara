@@ -25,9 +25,6 @@ const nextConfig = {
     };
     return config;
   },
-  
-  // Optimize for Vercel deployment
-  output: 'standalone',
 };
 
 module.exports = nextConfig;
