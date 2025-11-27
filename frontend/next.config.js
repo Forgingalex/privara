@@ -24,23 +24,18 @@ const nextConfig = {
       crypto: false,
     };
     
-    // Ignore React Native modules that MetaMask SDK tries to use
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@react-native-async-storage/async-storage': false,
-    };
+    // Ignore React Native modules that MetaMask SDK tries to use in browser
+    config.plugins.push(
+      new (require('webpack').IgnorePlugin)({
+        resourceRegExp: /^@react-native-async-storage\/async-storage$/,
+        contextRegExp: /node_modules\/@metamask/,
+      })
+    );
     
     // Ignore @zama-fhe/relayer-sdk during build (it's dynamically imported)
     config.plugins.push(
       new (require('webpack').IgnorePlugin)({
         resourceRegExp: /^@zama-fhe\/relayer-sdk/,
-      })
-    );
-    
-    // Ignore React Native async storage module
-    config.plugins.push(
-      new (require('webpack').IgnorePlugin)({
-        resourceRegExp: /^@react-native-async-storage\/async-storage$/,
       })
     );
     
