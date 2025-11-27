@@ -6,6 +6,7 @@ import { WagmiProvider, createConfig, http } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConnectKitProvider } from 'connectkit';
 import { sepolia, mainnet } from 'wagmi/chains';
+import NetworkSwitcher from './NetworkSwitcher';
 
 // Simple wagmi config
 const config = createConfig({
@@ -36,6 +37,7 @@ export default function Providers({ children }: ProvidersProps) {
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <ConnectKitProvider>
+            <NetworkSwitcher />
             {children}
           </ConnectKitProvider>
         </QueryClientProvider>
@@ -43,5 +45,8 @@ export default function Providers({ children }: ProvidersProps) {
     </PrivyProvider>
   );
 }
+
+
+
 
 
