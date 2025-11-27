@@ -23,6 +23,14 @@ const nextConfig = {
       tls: false,
       crypto: false,
     };
+    
+    // Ignore @zama-fhe/relayer-sdk during build (it's dynamically imported)
+    config.plugins.push(
+      new (require('webpack').IgnorePlugin)({
+        resourceRegExp: /^@zama-fhe\/relayer-sdk/,
+      })
+    );
+    
     return config;
   },
 };
