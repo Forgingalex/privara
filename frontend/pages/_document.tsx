@@ -12,12 +12,14 @@ export default function Document() {
               // Completely non-strict - no 'use strict' anywhere
               var g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
               
-              // Method 1: Direct assignment (works in non-strict)
-              if (typeof global === 'undefined') {
+              // Method 1: Direct assignment (works in non-strict) - don't check typeof first
+              try {
                 global = g;
+              } catch (e) {
+                // In strict mode or if global doesn't exist as variable
               }
               
-              // Method 2: Use Function constructor (always non-strict)
+              // Method 2: Use Function constructor (always non-strict) - creates true global
               (new Function('g', 'global = g'))(g);
               
               // Method 3: Define on globalThis

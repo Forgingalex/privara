@@ -34,6 +34,8 @@ const nextConfig = {
     
     // Configure WASM support for Zama FHE SDK (only on client side)
     if (!isServer) {
+      const webpack = require('webpack');
+      
       // Provide polyfill modules for global and globalThis
       // Some packages try to import these as modules, so we provide stubs
       config.resolve.alias = {
@@ -41,6 +43,14 @@ const nextConfig = {
         global: require.resolve('./polyfills/global.js'),
         globalThis: require.resolve('./polyfills/globalThis.js'),
       };
+      
+      // Use ProvidePlugin to inject 'global' whenever code references it
+      // This ensures global is available even in strict mode
+      config.plugins.push(
+        new webpack.ProvidePlugin({
+          global: require.resolve('./polyfills/global.js'),
+        })
+      );
       
       config.experiments = {
         ...config.experiments,
