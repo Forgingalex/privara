@@ -374,6 +374,8 @@ export default function SubmitPage() {
             handlesBytes32 as [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`],
             proofHex
           ],
+          // Add gas limit to prevent exceeding cap (16M gas, under the 16.7M cap)
+          gas: BigInt(16000000),
         },
         {
           onError: (error) => {
@@ -386,6 +388,8 @@ export default function SubmitPage() {
               displayError = 'Transaction was reverted by the contract. This might mean invalid data format or you already submitted.';
             } else if (errorMsg.includes('user rejected')) {
               displayError = 'Transaction was rejected by user.';
+            } else if (errorMsg.includes('gas limit') || errorMsg.includes('gas')) {
+              displayError = 'Transaction failed: Gas limit issue. Please try again.';
             }
             
             setError(displayError);
@@ -533,8 +537,34 @@ export default function SubmitPage() {
 
           {/* Error */}
           {error && (
-            <div style={{ background: 'rgba(255,0,0,0.2)', border: '1px solid #ff6b6b', borderRadius: '8px', padding: '1rem', marginBottom: '1rem', color: '#ff6b6b' }}>
-              {error}
+            <div style={{ 
+              background: 'rgba(239,68,68,0.2)', 
+              border: '1px solid #ef4444', 
+              borderRadius: '8px', 
+              padding: '1rem', 
+              marginBottom: '1rem',
+              maxHeight: '400px',
+              overflow: 'auto'
+            }}>
+              <p style={{ color: '#ef4444', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.875rem' }}>❌ Transaction Failed</p>
+              <div style={{ 
+                background: 'rgba(0,0,0,0.3)', 
+                padding: '0.75rem', 
+                borderRadius: '4px',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                <code style={{ 
+                  fontSize: '0.75rem', 
+                  color: '#ff6b6b', 
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                  display: 'block',
+                  lineHeight: '1.4'
+                }}>
+                  {error}
+                </code>
+              </div>
             </div>
           )}
 
