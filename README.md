@@ -184,16 +184,19 @@ The system computes 5 reputation metrics (0-100 scale) using integer approximati
 ## Development Status
 
 ### Completed
-- Frontend updated to use `@zama-fhe/relayer-sdk`
-- Encryption utilities refactored for Zama FHE integration
-- Architecture designed for FHEVM compatibility
-- Smart contract deployed to Sepolia testnet
-- Comprehensive test suite with 20+ test cases
-- Real FHE encryption integration
+- Frontend architecture updated for Zama FHE SDK integration
+- Encryption utilities refactored for Zama FHE compatibility
+- Smart contract deployed to Sepolia testnet ([View on Etherscan](https://sepolia.etherscan.io/address/0x293C20c5E122ea3e876DB5D44509BA94a78A42D9))
+- Comprehensive test suite with 30+ test cases
+- Frontend deployed and live ([Demo](https://privara-neon.vercel.app/))
+- Automatic network switching to Sepolia testnet
+- Transaction error handling and pre-submission validation
+- Disconnect wallet functionality
+- Zama FHE SDK package installed and properly initialized with WASM loading
 
 ### In Progress
-- Production-ready Zama FHE SDK integration
-- Enhanced Twitter API integration
+- Real Zama FHE encryption (SDK installed, needs testing with live contract)
+- Enhanced Twitter API integration (currently using mock data)
 - Multi-chain support
 
 ## Contributing

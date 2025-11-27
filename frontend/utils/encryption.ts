@@ -55,10 +55,21 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       const modulePath = '@zama-fhe/relayer-sdk/web';
       const dynamicImport = new Function('path', 'return import(path)');
       const sdkModule = await dynamicImport(modulePath);
-      const { createInstance, SepoliaConfig } = sdkModule;
+      const { initSDK, createInstance, SepoliaConfig } = sdkModule;
+      
+      // Initialize WASM modules first (required for SDK to work)
+      console.log('   Loading WASM modules...');
+      await initSDK();
+      
+      // Create config with network provider (required for wallet integration)
+      const config = {
+        ...SepoliaConfig,
+        network: typeof window !== 'undefined' && window.ethereum ? window.ethereum : undefined,
+      };
       
       // Create FHE instance with Sepolia config
-      fhevmInstance = await createInstance(SepoliaConfig);
+      console.log('   Creating FHE instance...');
+      fhevmInstance = await createInstance(config);
       
       console.log('✓ FHE SDK initialized for Sepolia');
     } catch (error) {
@@ -66,6 +77,7 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       
       // Fall back to mock mode if SDK fails (e.g., WASM not supported or package not installed)
       console.warn('⚠️ Falling back to mock encryption mode');
+      console.warn('   This is expected if @zama-fhe/relayer-sdk is not installed or WASM is not supported');
       fhevmInstance = createMockInstance();
     } finally {
       isInitializing = false;
