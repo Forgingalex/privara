@@ -50,9 +50,12 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
     console.log('🔐 Initializing Zama FHE SDK...');
     
     try {
-      // Dynamic import for browser environment
-      // @ts-ignore - SDK may not be available, fallback to mock if import fails
-      const { createInstance, SepoliaConfig } = await import('@zama-fhe/relayer-sdk/web');
+      // Dynamic import for browser environment - use Function constructor to avoid webpack resolution
+      // SDK may not be available at build time, fallback to mock if import fails
+      const modulePath = '@zama-fhe/relayer-sdk/web';
+      const dynamicImport = new Function('path', 'return import(path)');
+      const sdkModule = await dynamicImport(modulePath);
+      const { createInstance, SepoliaConfig } = sdkModule;
       
       // Create FHE instance with Sepolia config
       fhevmInstance = await createInstance(SepoliaConfig);
@@ -61,7 +64,7 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
     } catch (error) {
       console.error('Failed to initialize FHE SDK:', error);
       
-      // Fall back to mock mode if SDK fails (e.g., WASM not supported)
+      // Fall back to mock mode if SDK fails (e.g., WASM not supported or package not installed)
       console.warn('⚠️ Falling back to mock encryption mode');
       fhevmInstance = createMockInstance();
     } finally {
