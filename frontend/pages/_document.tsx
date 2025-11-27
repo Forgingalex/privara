@@ -5,35 +5,49 @@ export default function Document() {
     <Html>
       <Head>
         {/* Polyfill for global variable - MUST run before any other scripts */}
+        {/* Using non-strict script to allow implicit global creation */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // Non-strict mode script to define global variable
               (function() {
+                'use strict';
                 if (typeof window !== 'undefined') {
-                  if (typeof global === 'undefined') {
-                    var g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
-                    try {
-                      // Use Function constructor to create global in non-strict context
-                      (new Function('g', 'global = g'))(g);
-                    } catch (e) {
-                      // Fallback: define on window and use Object.defineProperty
-                      try {
-                        Object.defineProperty(g, 'global', {
-                          value: g,
-                          writable: true,
-                          enumerable: false,
-                          configurable: true
-                        });
-                      } catch (e2) {
-                        // Final fallback
+                  var g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
+                  
+                  // Method 1: Use eval in non-strict context
+                  try {
+                    (function() {
+                      // Non-strict function context
+                      eval('var global = g');
+                      // Now try to make it available globally
+                      if (typeof window !== 'undefined') {
                         window.global = g;
                       }
-                    }
-                    // Also set window.global
-                    if (typeof window !== 'undefined') {
-                      window.global = g;
-                    }
+                    })();
+                  } catch (e) {}
+                  
+                  // Method 2: Define on globalThis and window
+                  if (typeof globalThis !== 'undefined') {
+                    try {
+                      Object.defineProperty(globalThis, 'global', {
+                        value: g,
+                        writable: true,
+                        enumerable: false,
+                        configurable: true
+                      });
+                    } catch (e) {}
                   }
+                  
+                  // Method 3: Always set window.global
+                  if (typeof window !== 'undefined') {
+                    window.global = g;
+                  }
+                  
+                  // Method 4: Use Function constructor (executes in non-strict)
+                  try {
+                    (new Function('g', 'global = g'))(g);
+                  } catch (e) {}
                 }
               })();
             `,
