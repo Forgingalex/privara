@@ -9,17 +9,29 @@ if (typeof window !== 'undefined') {
   // @ts-ignore - global is not defined in browser, we're adding it
   if (typeof global === 'undefined') {
     // @ts-ignore
-    (function() {
+    const g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
+    
+    // Define global at the global scope using Object.defineProperty
+    try {
       // @ts-ignore
-      const g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
+      Object.defineProperty(g, 'global', {
+        value: g,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      });
+      
+      // Also set it on window for compatibility
       // @ts-ignore
-      if (typeof global === 'undefined') {
-        // @ts-ignore
-        global = g;
+      if (typeof window !== 'undefined') {
         // @ts-ignore
         window.global = g;
       }
-    })();
+    } catch (e) {
+      // Fallback: just set window.global
+      // @ts-ignore
+      window.global = g;
+    }
   }
 }
 
