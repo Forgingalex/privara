@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { parseHexPayload } from '../utils/encryption';
+import { parseHexPayload, isRealFHE } from '../utils/encryption';
 
 // Privara Contract ABI (includes hasUserSubmitted check)
 const PRIVARA_ABI = [
@@ -261,6 +261,13 @@ export default function SubmitPage() {
     setTxFailed(false);
     resetSubmit?.();
     resetCompute?.();
+
+    // Check if real FHE encryption is being used (required for real contract)
+    if (!isDemoMode && contractAddress && !isRealFHE()) {
+      setError('Real FHE encryption is required for contract submission. The Zama FHE SDK is not properly initialized or is using mock encryption. Please refresh the page and try again. If the issue persists, the FHE SDK may need to be installed or configured properly.');
+      setIsSubmitting(false);
+      return;
+    }
 
     // Check if user has already submitted (for real contract only)
     if (!isDemoMode && contractAddress) {
