@@ -8,11 +8,20 @@ import { useEffect } from 'react';
 import '../styles/globals.css';
 
 // Polyfill for 'global' variable in browser (needed for Zama FHE SDK)
+// Must run before any SDK code loads
 if (typeof window !== 'undefined') {
-  // @ts-ignore
+  // Define global at the global scope (not just window.global)
+  // @ts-ignore - global is not defined in browser, we're adding it
   if (typeof global === 'undefined') {
     // @ts-ignore
-    window.global = typeof globalThis !== 'undefined' ? globalThis : window;
+    (function(globalThis) {
+      // @ts-ignore
+      global = globalThis;
+    })(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {});
+    
+    // Also set window.global for compatibility
+    // @ts-ignore
+    window.global = global;
   }
 }
 

@@ -3,6 +3,26 @@
  * Uses Zama FHE relayer SDK for real homomorphic encryption
  */
 
+// Polyfill global variable BEFORE any SDK imports
+// This must run immediately when this module loads
+if (typeof window !== 'undefined') {
+  // @ts-ignore - global is not defined in browser, we're adding it
+  if (typeof global === 'undefined') {
+    // @ts-ignore
+    (function() {
+      // @ts-ignore
+      const g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
+      // @ts-ignore
+      if (typeof global === 'undefined') {
+        // @ts-ignore
+        global = g;
+        // @ts-ignore
+        window.global = g;
+      }
+    })();
+  }
+}
+
 export interface TwitterMetrics {
   follower_count: number;
   following_count: number;
