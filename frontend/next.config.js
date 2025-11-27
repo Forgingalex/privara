@@ -15,7 +15,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
       fs: false,
@@ -32,12 +32,19 @@ const nextConfig = {
       })
     );
     
-    // Ignore @zama-fhe/relayer-sdk during build (it's dynamically imported)
-    config.plugins.push(
-      new (require('webpack').IgnorePlugin)({
-        resourceRegExp: /^@zama-fhe\/relayer-sdk/,
-      })
-    );
+    // Configure WASM support for Zama FHE SDK (only on client side)
+    if (!isServer) {
+      config.experiments = {
+        ...config.experiments,
+        asyncWebAssembly: true,
+      };
+      
+      // Add support for .wasm files
+      config.module.rules.push({
+        test: /\.wasm$/,
+        type: 'asset/resource',
+      });
+    }
     
     return config;
   },
