@@ -34,6 +34,14 @@ const nextConfig = {
     
     // Configure WASM support for Zama FHE SDK (only on client side)
     if (!isServer) {
+      // Define global variables at build time (fixes "global is not defined" errors)
+      const webpack = require('webpack');
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          'global': 'typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof self !== "undefined" ? self : {}',
+        })
+      );
+      
       config.experiments = {
         ...config.experiments,
         asyncWebAssembly: true,
