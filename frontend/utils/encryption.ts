@@ -49,12 +49,13 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
   initPromise = (async () => {
     console.log('🔐 Initializing Zama FHE SDK...');
     
-    try {
-      // Only initialize in browser environment
+    // Only initialize in browser environment
     if (typeof window === 'undefined') {
-        throw new Error('FHE SDK can only be initialized in browser');
-      }
-      
+      isInitializing = false;
+      throw new Error('FHE SDK can only be initialized in browser');
+    }
+    
+    try {
       // Use dynamic import - webpack will bundle it properly now
       // Import from the main package entry point
       const sdkModule = await import('@zama-fhe/relayer-sdk/web');
@@ -76,13 +77,15 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       
       console.log('✓ FHE SDK initialized for Sepolia');
     } catch (error: any) {
-      console.error('Failed to initialize FHE SDK:', error);
+      console.error('❌ Failed to initialize FHE SDK:', error);
       console.error('   Error details:', error?.message || error);
+      isInitializing = false;
       
-      // Fall back to mock mode if SDK fails (e.g., WASM not supported or package not installed)
-      console.warn('⚠️ Falling back to mock encryption mode');
-      console.warn('   This is expected if @zama-fhe/relayer-sdk is not installed or WASM is not supported');
-      fhevmInstance = createMockInstance();
+      // Throw error - no mock fallback, app requires real FHE
+      throw new Error(
+        `FHE SDK initialization failed: ${error?.message || 'Unknown error'}. ` +
+        `Please ensure @zama-fhe/relayer-sdk is properly installed and WASM is supported in your browser.`
+      );
     } finally {
       isInitializing = false;
     }
@@ -92,61 +95,10 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
 }
 
 /**
- * Create mock FHE instance for development/fallback
- */
-function createMockInstance() {
-  return {
-    isMock: true,
-    createEncryptedInput: (contractAddress: string, userAddress: string) => {
-      const values: number[] = [];
-      const builder = {
-        add32: (value: number | bigint) => {
-          values.push(Number(value));
-          return builder;
-        },
-        encrypt: async () => {
-          // Create mock handles (32 bytes each) - more realistic format
-          const handles = values.map((v, i) => {
-            const handle = new Uint8Array(32);
-            // Store index in first byte
-            handle[0] = i;
-            // Store value in last byte
-            handle[31] = v % 256;
-            // Fill middle bytes with hash-like pattern for realism
-            const hash = (i * 17 + v) % 256;
-            for (let j = 1; j < 31; j++) {
-              handle[j] = (hash + j) % 256;
-            }
-            return handle;
-          });
-          
-          // Create mock proof - more realistic size and format
-          const inputProof = new Uint8Array(256); // More realistic proof size
-          // Add a recognizable header (but not DEAD which looks like an error)
-          inputProof[0] = 0x01;
-          inputProof[1] = 0x02;
-          // Fill with data based on handles
-          for (let i = 2; i < inputProof.length; i++) {
-            inputProof[i] = (i + values.reduce((a, b) => a + b, 0)) % 256;
-          }
-          
-          return { handles, inputProof };
-        },
-      };
-      return builder;
-    },
-    generateKeypair: () => ({
-      publicKey: '0x' + '00'.repeat(32),
-      privateKey: '0x' + 'ff'.repeat(32),
-    }),
-  };
-}
-
-/**
- * Check if using real FHE or mock
+ * Check if FHE SDK is initialized
  */
 export function isRealFHE(): boolean {
-  return fhevmInstance && !fhevmInstance.isMock;
+  return fhevmInstance !== null;
 }
 
 /**
@@ -157,7 +109,12 @@ export async function encryptMetrics(
   metrics: TwitterMetrics,
   userAddress: string
 ): Promise<{ handles: Uint8Array[]; inputProof: Uint8Array; hexPayload: string }> {
+  // Initialize FHE SDK (will throw if it fails)
   await initializeFHE();
+  
+  if (!fhevmInstance) {
+    throw new Error('FHE SDK not initialized. Please refresh the page and ensure Zama FHE SDK loads correctly.');
+  }
   
   if (!userAddress) {
     throw new Error('User address required for encryption');
@@ -183,7 +140,7 @@ export async function encryptMetrics(
   
   console.log('   Scaled metrics:', scaledMetrics);
   
-  // Create encrypted input with 8 metrics
+  // Create encrypted input with 8 metrics using real Zama FHE SDK
   const encryptedInput = await fhevmInstance
     .createEncryptedInput(contractAddress, userAddress)
     .add32(scaledMetrics.follower_count)
@@ -196,7 +153,7 @@ export async function encryptMetrics(
     .add32(scaledMetrics.growth_score)
     .encrypt();
   
-  console.log('✓ Metrics encrypted');
+  console.log('✓ Metrics encrypted with real Zama FHE');
   console.log('   Handles:', encryptedInput.handles.length);
   console.log('   Proof size:', encryptedInput.inputProof.length, 'bytes');
   
@@ -276,104 +233,75 @@ export async function decryptResult(
   
   console.log('🔓 Preparing decryption...');
   
-  // For real FHE, we need to use the gateway for decryption
+  // Ensure FHE SDK is initialized
+  if (!fhevmInstance) {
+    throw new Error('FHE SDK not initialized. Cannot decrypt without Zama FHE SDK.');
+  }
+  
+  // Real FHE decryption using Zama SDK
   // This requires:
   // 1. Generate a keypair
   // 2. Create EIP712 signature request
   // 3. User signs the request
   // 4. Call userDecrypt with signature
   
-  if (!fhevmInstance.isMock) {
-    // Real FHE decryption
-    const { publicKey, privateKey } = fhevmInstance.generateKeypair();
-    
-    // Create EIP712 data for decryption permission
-    const startTimestamp = Math.floor(Date.now() / 1000);
-    const durationDays = 1; // Permission valid for 1 day
-    
-    const eip712 = fhevmInstance.createEIP712(
-      publicKey,
-      [contractAddress],
-      startTimestamp,
-      durationDays
-    );
-    
-    console.log('📝 Please sign the decryption request...');
-    
-    // Get user signature
-    const signature = await signMessage(eip712);
-    
-    // Prepare handles with contract address
-    const handlePairs = encryptedResults.map(handle => ({
-      handle,
-      contractAddress,
-    }));
-    
-    // Decrypt via gateway
-    const decryptedResults = await fhevmInstance.userDecrypt(
-      handlePairs,
-      privateKey,
-      publicKey,
-      signature,
-      [contractAddress],
-      userAddress,
-      startTimestamp,
-      durationDays
-    );
-    
-    console.log('✓ Decryption complete');
-    
-    // Parse results (5 scores: authenticity, influence, health, risk, momentum)
-    return {
-      authenticity: Number(decryptedResults[0]) / 100,
-      influence: Number(decryptedResults[1]) / 100,
-      account_health: Number(decryptedResults[2]) / 100,
-      risk_score: Number(decryptedResults[3]) / 100,
-      momentum: Number(decryptedResults[4]) / 100,
-    };
-  }
+  const { publicKey, privateKey } = fhevmInstance.generateKeypair();
   
-  // Mock decryption for development
-  console.log('⚠️ Using mock decryption');
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Create EIP712 data for decryption permission
+  const startTimestamp = Math.floor(Date.now() / 1000);
+  const durationDays = 1; // Permission valid for 1 day
   
+  const eip712 = fhevmInstance.createEIP712(
+    publicKey,
+    [contractAddress],
+    startTimestamp,
+    durationDays
+  );
+  
+  console.log('📝 Please sign the decryption request...');
+  
+  // Get user signature
+  const signature = await signMessage(eip712);
+  
+  // Prepare handles with contract address
+  const handlePairs = encryptedResults.map(handle => ({
+    handle,
+    contractAddress,
+  }));
+  
+  // Decrypt via gateway
+  const decryptedResults = await fhevmInstance.userDecrypt(
+    handlePairs,
+    privateKey,
+    publicKey,
+    signature,
+    [contractAddress],
+    userAddress,
+    startTimestamp,
+    durationDays
+  );
+  
+  console.log('✓ Decryption complete');
+  
+  // Parse results (5 scores: authenticity, influence, health, risk, momentum)
   return {
-    authenticity: 85.5,
-    influence: 72.3,
-    account_health: 91.2,
-    risk_score: 12.8,
-    momentum: 67.4,
+    authenticity: Number(decryptedResults[0]) / 100,
+    influence: Number(decryptedResults[1]) / 100,
+    account_health: Number(decryptedResults[2]) / 100,
+    risk_score: Number(decryptedResults[3]) / 100,
+    momentum: Number(decryptedResults[4]) / 100,
   };
 }
 
 /**
- * Simplified decrypt for demo (without real FHE signature flow)
+ * Demo decrypt - throws error as mock encryption is removed
+ * Real FHE decryption is required via decryptResult function
  */
 export async function decryptResultDemo(hexPayload: string): Promise<ReputationVector> {
-  console.log('🔓 Decrypting result (demo mode)...');
-  
-  // Simulate decryption delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Generate deterministic but varied results based on payload hash
-  let hash = 0;
-  for (let i = 0; i < Math.min(hexPayload.length, 100); i++) {
-    hash = ((hash << 5) - hash) + hexPayload.charCodeAt(i);
-    hash = hash & hash;
-  }
-  
-  const seed = Math.abs(hash);
-  const generate = (offset: number) => ((seed + offset * 1337) % 8000 + 2000) / 100;
-  
-  console.log('✓ Result decrypted (demo)');
-  
-  return {
-    authenticity: generate(0),
-    influence: generate(1),
-    account_health: generate(2),
-    risk_score: Math.min(30, generate(3)), // Risk should be low for good accounts
-    momentum: generate(4),
-  };
+  throw new Error(
+    'Mock decryption is no longer available. This application requires real Zama FHE encryption. ' +
+    'Please ensure the FHE SDK is properly initialized and use the real decryptResult function with signature support.'
+  );
 }
 
 /**
