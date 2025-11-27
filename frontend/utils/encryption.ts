@@ -96,27 +96,58 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       // Initialize WASM modules first (required for SDK to work)
       console.log('   Loading WASM modules...');
       await initSDK();
+      console.log('   ✓ WASM modules loaded');
       
       // Create config with network provider (required for wallet integration)
+      console.log('   Creating config...');
       const config = {
         ...SepoliaConfig,
         network: typeof window !== 'undefined' && window.ethereum ? window.ethereum : undefined,
       };
       
+      console.log('   Config:', {
+        ...config,
+        network: config.network ? 'ethereum provider available' : 'no ethereum provider',
+      });
+      
       // Create FHE instance with Sepolia config
-      console.log('   Creating FHE instance...');
-      fhevmInstance = await createInstance(config);
+      console.log('   Creating FHE instance (this may take a moment)...');
+      console.log('   Note: This connects to Zama relayer gateway...');
+      
+      // Add timeout and better error handling
+      const createInstancePromise = createInstance(config);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Relayer connection timeout after 30 seconds')), 30000)
+      );
+      
+      fhevmInstance = await Promise.race([createInstancePromise, timeoutPromise]);
       
       console.log('✓ FHE SDK initialized for Sepolia');
     } catch (error: any) {
       console.error('❌ Failed to initialize FHE SDK:', error);
       console.error('   Error details:', error?.message || error);
+      console.error('   Full error:', error);
+      
+      // Provide more helpful error message based on error type
+      let errorMessage = error?.message || 'Unknown error';
+      
+      if (errorMessage.includes('Relayer') || errorMessage.includes('Bad JSON')) {
+        errorMessage = `Relayer connection failed: ${errorMessage}. ` +
+          `The Zama FHE relayer gateway may be temporarily unavailable or unreachable. ` +
+          `Please check your internet connection and try again. ` +
+          `If the issue persists, the relayer may be under maintenance.`;
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = `Relayer connection timeout: ${errorMessage}. ` +
+          `The Zama FHE relayer gateway did not respond in time. Please try again.`;
+      }
+      
       isInitializing = false;
       
       // Throw error - no mock fallback, app requires real FHE
       throw new Error(
-        `FHE SDK initialization failed: ${error?.message || 'Unknown error'}. ` +
-        `Please ensure @zama-fhe/relayer-sdk is properly installed and WASM is supported in your browser.`
+        `FHE SDK initialization failed: ${errorMessage}. ` +
+        `Please ensure @zama-fhe/relayer-sdk is properly installed, WASM is supported in your browser, ` +
+        `and the Zama relayer gateway is accessible.`
       );
     } finally {
       isInitializing = false;
