@@ -89,18 +89,30 @@ function createMockInstance() {
           return builder;
         },
         encrypt: async () => {
-          // Create mock handles (32 bytes each)
+          // Create mock handles (32 bytes each) - more realistic format
           const handles = values.map((v, i) => {
             const handle = new Uint8Array(32);
+            // Store index in first byte
             handle[0] = i;
+            // Store value in last byte
             handle[31] = v % 256;
+            // Fill middle bytes with hash-like pattern for realism
+            const hash = (i * 17 + v) % 256;
+            for (let j = 1; j < 31; j++) {
+              handle[j] = (hash + j) % 256;
+            }
             return handle;
           });
           
-          // Create mock proof
-          const inputProof = new Uint8Array(64);
-          inputProof[0] = 0xDE;
-          inputProof[1] = 0xAD;
+          // Create mock proof - more realistic size and format
+          const inputProof = new Uint8Array(256); // More realistic proof size
+          // Add a recognizable header (but not DEAD which looks like an error)
+          inputProof[0] = 0x01;
+          inputProof[1] = 0x02;
+          // Fill with data based on handles
+          for (let i = 2; i < inputProof.length; i++) {
+            inputProof[i] = (i + values.reduce((a, b) => a + b, 0)) % 256;
+          }
           
           return { handles, inputProof };
         },

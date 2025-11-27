@@ -296,21 +296,74 @@ export default function SubmitPage() {
       return;
     }
 
+    // Validate handles before submission
+    if (handles.length !== 8) {
+      setError(`Invalid encrypted data: Expected 8 handles, got ${handles.length}. Please encrypt your data again.`);
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate handles are not empty
+    const emptyHandles = handles.some(h => !h || h.length === 0);
+    if (emptyHandles) {
+      setError('Invalid encrypted data: Some handles are empty. Please encrypt your data again.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate proof exists
+    if (!inputProof || inputProof.length === 0) {
+      setError('Invalid encrypted data: Missing proof. Please encrypt your data again.');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       console.log('📤 Submitting to contract:', contractAddress);
+      console.log('   Handles count:', handles.length);
+      console.log('   Input proof length:', inputProof.length, 'bytes');
+      console.log('   Handle sizes:', handles.map(h => h.length));
       
-      // Convert handles to bytes32 format
-      const handlesBytes32 = handles.map(h => {
-        // Pad to 32 bytes
-        const padded = new Uint8Array(32);
-        padded.set(h.slice(0, 32));
-        return ('0x' + Array.from(padded).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
+      // Convert handles to bytes32 format - ensure exactly 32 bytes each
+      const handlesBytes32 = handles.map((h, index) => {
+        // Ensure handle is exactly 32 bytes
+        const handle32 = new Uint8Array(32);
+        
+        if (h.length > 32) {
+          // Truncate if longer than 32 bytes
+          handle32.set(h.slice(0, 32));
+          console.warn(`Handle ${index} was ${h.length} bytes, truncated to 32`);
+        } else if (h.length < 32) {
+          // Pad with zeros if shorter than 32 bytes
+          handle32.set(h);
+          console.warn(`Handle ${index} was ${h.length} bytes, padded to 32`);
+        } else {
+          // Already 32 bytes - use directly
+          handle32.set(h);
+        }
+        
+        // Convert to hex string
+        const hex = '0x' + Array.from(handle32)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+        
+        return hex as `0x${string}`;
       });
 
-      // Ensure we have exactly 8 handles
-      while (handlesBytes32.length < 8) {
-        handlesBytes32.push('0x' + '00'.repeat(32) as `0x${string}`);
-      }
+      // Validate handles are properly formatted
+      handlesBytes32.forEach((handle, i) => {
+        if (!handle || handle.length !== 66) { // 0x + 64 hex chars = 66
+          throw new Error(`Invalid handle format at index ${i}: ${handle}`);
+        }
+      });
+
+      // Format input proof as hex
+      const proofHex = '0x' + Array.from(inputProof)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('') as `0x${string}`;
+      
+      console.log('   Formatted handles:', handlesBytes32.map(h => h.slice(0, 10) + '...'));
+      console.log('   Proof hex length:', proofHex.length, 'characters');
 
       submitMetrics(
         {
@@ -318,14 +371,24 @@ export default function SubmitPage() {
           abi: PRIVARA_ABI,
           functionName: 'submitMetrics',
           args: [
-            handlesBytes32.slice(0, 8) as [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`],
-            ('0x' + Array.from(inputProof).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`
+            handlesBytes32 as [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`],
+            proofHex
           ],
         },
         {
           onError: (error) => {
             console.error('Transaction error:', error);
-            setError(`Transaction failed: ${error.message || 'Unknown error'}`);
+            const errorMsg = error?.message || 'Unknown error';
+            
+            // Provide more helpful error messages
+            let displayError = `Transaction failed: ${errorMsg}`;
+            if (errorMsg.includes('execution reverted')) {
+              displayError = 'Transaction was reverted by the contract. This might mean invalid data format or you already submitted.';
+            } else if (errorMsg.includes('user rejected')) {
+              displayError = 'Transaction was rejected by user.';
+            }
+            
+            setError(displayError);
             setTxFailed(true);
             setIsSubmitting(false);
           },
