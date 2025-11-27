@@ -15,21 +15,31 @@ if (typeof window !== 'undefined') {
     // @ts-ignore
     const g = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
     
-    // Define global at the global scope using Object.defineProperty
+    // Use Function constructor to define global in non-strict context
+    // This creates a true top-level global variable
     try {
       // @ts-ignore
-      Object.defineProperty(g, 'global', {
-        value: g,
-        writable: true,
-        enumerable: false,
-        configurable: true,
-      });
-      
-      // Also set it on window for compatibility
-      // @ts-ignore
-      window.global = g;
+      (new Function('g', 'global = g'))(g);
     } catch (e) {
-      // Fallback: just set window.global
+      // Fallback: use Object.defineProperty on globalThis
+      try {
+        // @ts-ignore
+        Object.defineProperty(g, 'global', {
+          value: g,
+          writable: true,
+          enumerable: false,
+          configurable: true,
+        });
+      } catch (e2) {
+        // Final fallback: just set window.global
+        // @ts-ignore
+        window.global = g;
+      }
+    }
+    
+    // Also set window.global for compatibility
+    // @ts-ignore
+    if (typeof window !== 'undefined' && !window.global) {
       // @ts-ignore
       window.global = g;
     }
