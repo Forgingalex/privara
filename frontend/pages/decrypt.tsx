@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { decryptResultDemo, ReputationVector, isRealFHE, initializeFHE } from '../utils/encryption';
+import type { ReputationVector } from '../utils/encryption';
 
 export default function DecryptPage() {
   const router = useRouter();
@@ -33,6 +33,11 @@ export default function DecryptPage() {
         
         // Give wallet a moment to initialize
         await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // CRITICAL: Lazy-load encryption utils only after component mounts in browser
+        // This prevents any SDK code from executing during module import/evaluation
+        const encryptionUtils = await import('../utils/encryption');
+        const { initializeFHE, isRealFHE } = encryptionUtils;
         
         await initializeFHE();
         setIsDemoMode(!isRealFHE() || !isRealContract);
@@ -83,6 +88,10 @@ export default function DecryptPage() {
       }
       
       console.log('🔓 Decrypting reputation...');
+      
+      // Lazy-load encryption utils
+      const encryptionUtils = await import('../utils/encryption');
+      const { decryptResultDemo } = encryptionUtils;
       
       // Use demo decryption (TODO: implement real FHE decryption for production)
       const rep = await decryptResultDemo(payload);

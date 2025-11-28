@@ -76,13 +76,13 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
   // Return existing initialization if in progress
   if (initPromise) return initPromise;
   if (fhevmInstance) return;
-
+  
   // Only initialize in browser environment
   // Return silently during SSR to avoid errors
-  if (typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
     console.warn('⚠️ FHE SDK initialization skipped - running in server environment');
-    return;
-  }
+      return;
+    }
 
   // CRITICAL: Require wallet provider before initialization (fhedback approach)
   // The SDK needs the ethereum provider to be available
@@ -182,6 +182,16 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       }
       
       // Per Zama docs: "you need to load the WASM of TFHE first with initSDK"
+      
+      // CRITICAL: Verify browser is fully ready before calling initSDK()
+      // initSDK() loads WASM which may access window internally
+      if (typeof window === 'undefined' || !window.document || typeof document === 'undefined') {
+        throw new Error('Browser environment not ready - cannot load WASM modules');
+      }
+      
+      // Small delay to ensure browser environment is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       console.log('   Loading WASM modules...');
       await initSDK();
       console.log('   ✓ WASM modules loaded');
@@ -477,7 +487,7 @@ export async function decryptResult(
   console.log('✓ Decryption complete');
   
   // Parse results (5 scores: authenticity, influence, health, risk, momentum)
-  return {
+    return {
     authenticity: Number(decryptedResults[0]) / 100,
     influence: Number(decryptedResults[1]) / 100,
     account_health: Number(decryptedResults[2]) / 100,

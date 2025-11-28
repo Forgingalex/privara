@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useRouter } from 'next/router';
-import { encryptMetrics, validateMetrics, TwitterMetrics, initializeFHE, isRealFHE } from '../utils/encryption';
+import type { TwitterMetrics } from '../utils/encryption';
 import { generateMockTwitterMetrics } from '../utils/twitter';
 import Link from 'next/link';
 
@@ -41,6 +41,11 @@ export default function EncryptPage() {
         // Give wallet provider a moment to initialize
         await new Promise(resolve => setTimeout(resolve, 500));
         
+        // CRITICAL: Lazy-load encryption utils only after component mounts in browser
+        // This prevents any SDK code from executing during module import/evaluation
+        const encryptionUtils = await import('../utils/encryption');
+        const { initializeFHE, isRealFHE, validateMetrics } = encryptionUtils;
+        
         // Initialize FHE SDK (will check for wallet internally)
         await initializeFHE();
         setFheReady(true);
@@ -71,6 +76,10 @@ export default function EncryptPage() {
     setError(null);
     
     try {
+      // Lazy-load encryption utils
+      const encryptionUtils = await import('../utils/encryption');
+      const { encryptMetrics, isRealFHE: isRealFHECheck } = encryptionUtils;
+      
       const result = await encryptMetrics(metrics, address);
       setEncryptedData(result.hexPayload);
       
@@ -84,7 +93,7 @@ export default function EncryptPage() {
       ));
       
       console.log('✅ Encryption complete');
-      console.log('   Real FHE:', isRealEncryption);
+      console.log('   Real FHE:', isRealFHECheck());
       console.log('   Payload size:', result.hexPayload.length, 'chars');
     } catch (err: any) {
       setError(err.message || 'Encryption failed');
