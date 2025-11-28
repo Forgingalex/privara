@@ -22,10 +22,25 @@ export default function DecryptPage() {
       return;
     }
     
-    // Initialize FHE and check mode
+    // Initialize FHE and check mode (wait for wallet to be ready)
     const init = async () => {
-      await initializeFHE();
-      setIsDemoMode(!isRealFHE() || !isRealContract);
+      try {
+        // Wait for wallet provider to be ready
+        if (!window.ethereum) {
+          console.warn('Ethereum provider not available yet');
+          return;
+        }
+        
+        // Give wallet a moment to initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        await initializeFHE();
+        setIsDemoMode(!isRealFHE() || !isRealContract);
+      } catch (err: any) {
+        console.error('Failed to initialize FHE:', err);
+        // Don't block the page, just set demo mode
+        setIsDemoMode(true);
+      }
     };
     init();
     

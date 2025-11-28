@@ -32,7 +32,16 @@ export default function EncryptPage() {
       setError(null);
       
       try {
-        // Initialize FHE SDK
+        // Wait for wallet to be fully ready (fhedback approach)
+        if (!window.ethereum) {
+          setError('Please connect your wallet first');
+          return;
+        }
+        
+        // Give wallet provider a moment to initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Initialize FHE SDK (will check for wallet internally)
         await initializeFHE();
         setFheReady(true);
         setIsRealEncryption(isRealFHE());
@@ -45,6 +54,7 @@ export default function EncryptPage() {
         }
         setMetrics(data);
       } catch (err: any) {
+        console.error('FHE initialization error:', err);
         setError(`Failed to initialize: ${err.message || 'Unknown error'}`);
       } finally {
         setLoading(false);

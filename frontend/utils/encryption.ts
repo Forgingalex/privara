@@ -70,21 +70,44 @@ const getContractAddress = (): string => {
 
 /**
  * Initialize FHE SDK for Sepolia network
+ * Based on fhedback implementation approach
  */
 export async function initializeFHE(contractAddr?: string): Promise<void> {
   // Return existing initialization if in progress
   if (initPromise) return initPromise;
   if (fhevmInstance) return;
 
+  // Only initialize in browser environment
+  if (typeof window === 'undefined') {
+    throw new Error('FHE SDK can only be initialized in browser');
+  }
+
+  // CRITICAL: Require wallet provider before initialization (fhedback approach)
+  // The SDK needs the ethereum provider to be available
+  if (!window.ethereum) {
+    throw new Error(
+      'Ethereum provider (MetaMask/wallet) is required. ' +
+      'Please connect your wallet first before initializing FHE SDK.'
+    );
+  }
+
+  // Get contract address - needed for encryption operations
+  let contractAddress: string;
+  try {
+    contractAddress = contractAddr || getContractAddress();
+  } catch (e) {
+    // Contract address might not be required for initialization itself
+    // but log a warning
+    console.warn('⚠️ Contract address not available yet:', e);
+    contractAddress = '';
+  }
+
   isInitializing = true;
   
   initPromise = (async () => {
     console.log('🔐 Initializing Zama FHE SDK...');
-    
-    // Only initialize in browser environment
-    if (typeof window === 'undefined') {
-      isInitializing = false;
-      throw new Error('FHE SDK can only be initialized in browser');
+    if (contractAddress) {
+      console.log('   Contract:', contractAddress);
     }
     
     try {
@@ -93,20 +116,28 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       const sdkModule = await import('@zama-fhe/relayer-sdk/web');
       const { initSDK, createInstance, SepoliaConfig } = sdkModule;
       
+      // Log SepoliaConfig to inspect configuration (for debugging)
+      console.log('   SepoliaConfig:', {
+        chainId: SepoliaConfig?.chainId,
+        // Note: Relayer URL is internal to the SDK config
+      });
+      
       // Initialize WASM modules first (required for SDK to work)
       console.log('   Loading WASM modules...');
       await initSDK();
       console.log('   ✓ WASM modules loaded');
       
       // Create config with network provider (required for wallet integration)
+      // Note: Contract address is not passed to createInstance config
+      // but is used later in createEncryptedInput()
       console.log('   Creating config...');
       const config = {
         ...SepoliaConfig,
-        network: typeof window !== 'undefined' && window.ethereum ? window.ethereum : undefined,
+        network: window.ethereum,
       };
       
       console.log('   Config:', {
-        ...config,
+        chainId: config.chainId,
         network: config.network ? 'ethereum provider available' : 'no ethereum provider',
       });
       
@@ -127,11 +158,23 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       console.error('❌ Failed to initialize FHE SDK:', error);
       console.error('   Error details:', error?.message || error);
       console.error('   Full error:', error);
+      console.error('   Error stack:', error?.stack);
       
       // Provide more helpful error message based on error type
       let errorMessage = error?.message || 'Unknown error';
+      const errorString = String(error);
       
-      if (errorMessage.includes('Relayer') || errorMessage.includes('Bad JSON')) {
+      // Detect DNS resolution failures
+      if (errorString.includes('ERR_NAME_NOT_RESOLVED') || 
+          errorString.includes('Failed to fetch') ||
+          errorString.includes('NetworkError') ||
+          errorMessage.includes('ERR_NAME_NOT_RESOLVED')) {
+        errorMessage = `DNS/Network error: Cannot resolve relayer gateway hostname. ` +
+          `This usually means: (1) The relayer URL in SepoliaConfig is incorrect, ` +
+          `(2) There's a network connectivity issue, or (3) The relayer gateway is down. ` +
+          `Please check your internet connection and try again. ` +
+          `Original error: ${errorMessage}`;
+      } else if (errorMessage.includes('Relayer') || errorMessage.includes('Bad JSON')) {
         errorMessage = `Relayer connection failed: ${errorMessage}. ` +
           `The Zama FHE relayer gateway may be temporarily unavailable or unreachable. ` +
           `Please check your internet connection and try again. ` +
