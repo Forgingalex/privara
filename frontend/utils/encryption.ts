@@ -145,9 +145,9 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       
       console.log('   ✓ All required SDK exports verified');
       
-      // Log SepoliaConfig to inspect configuration (for debugging)
+      // Log SepoliaConfig for debugging (but we won't use it)
       // CRITICAL: SepoliaConfig has wrong relayerUrl (.cloud instead of .org)
-      console.log('   ⚠️ SepoliaConfig contains:', {
+      console.log('   ⚠️ SepoliaConfig contains (for reference only):', {
         chainId: SepoliaConfig?.chainId,
         gatewayChainId: (SepoliaConfig as any)?.gatewayChainId,
         relayerUrl: (SepoliaConfig as any)?.relayerUrl || 'not visible',
@@ -155,7 +155,7 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       const sepoliaRelayerUrl = (SepoliaConfig as any)?.relayerUrl;
       if (sepoliaRelayerUrl && !sepoliaRelayerUrl.includes('.org')) {
         console.warn('   ⚠️ WARNING: SepoliaConfig has wrong relayer URL:', sepoliaRelayerUrl);
-        console.warn('   Will override with correct URL (.org)');
+        console.warn('   We will completely ignore SepoliaConfig and build config from scratch');
       }
       
       // Per Zama docs: "you need to load the WASM of TFHE first with initSDK"
@@ -163,60 +163,61 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       await initSDK();
       console.log('   ✓ WASM modules loaded');
       
-      // CRITICAL: Build config manually to avoid SepoliaConfig's wrong relayerUrl (.cloud)
-      // Only use the chain IDs from SepoliaConfig, but override ALL URL-related properties
-      console.log('   Creating config manually (overriding SepoliaConfig URLs)...');
+      // CRITICAL: Build config completely from scratch - don't use SepoliaConfig at all
+      // This ensures SDK can't use SepoliaConfig's wrong .cloud URL internally
+      console.log('   ⚠️ Building config from scratch (completely ignoring SepoliaConfig)...');
       
       const correctRelayerUrl = process.env.NEXT_PUBLIC_ZAMA_RELAYER_URL || 'https://relayer.testnet.zama.org';
       
-      // Build config from scratch, explicitly setting all URL-related properties
-      // Don't rely on SepoliaConfig for URLs - it has the wrong .cloud URL
+      // Build minimal config from scratch - NO SepoliaConfig dependency
+      // Hardcode all values to avoid SDK using internal SepoliaConfig
       const config: any = {
-        // Copy only the chain IDs from SepoliaConfig (these are correct)
-        chainId: SepoliaConfig?.chainId || 11155111,
-        gatewayChainId: (SepoliaConfig as any)?.gatewayChainId || 55815,
+        // Hardcoded chain IDs (don't read from SepoliaConfig)
+        chainId: 11155111, // Sepolia testnet
+        gatewayChainId: 55815, // Sepolia gateway chain ID
         
-        // Set network provider
+        // Network provider (required)
         network: window.ethereum,
         
-        // CRITICAL: Explicitly override ALL URL-related properties
-        // SepoliaConfig has wrong URL (.cloud), we must use .org
+        // CRITICAL: Set relayer URL explicitly - this is what SDK uses
         relayerUrl: correctRelayerUrl,
-        // Override gatewayUrl if it exists (some SDK versions use this)
-        gatewayUrl: correctRelayerUrl,
-        // Override any other URL variants
-        relayer: correctRelayerUrl,
       };
       
-      // Log what we're using
-      console.log('   ===== Custom Config (NOT using SepoliaConfig URLs) =====');
+      // Log config (no SepoliaConfig involved)
+      console.log('   ===== Custom Config (100% independent, no SepoliaConfig) =====');
       console.log('   chainId:', config.chainId);
       console.log('   gatewayChainId:', config.gatewayChainId);
       console.log('   network:', config.network ? 'ethereum provider available' : 'no ethereum provider');
       console.log('   relayerUrl:', config.relayerUrl);
-      console.log('   gatewayUrl:', config.gatewayUrl);
-      console.log('   ====================================================');
+      console.log('   ==============================================================');
+      console.log('   ✓ Using relayer URL:', correctRelayerUrl);
       
-      console.log('   ✓ Using correct relayer URL:', correctRelayerUrl);
-      if (sepoliaRelayerUrl && sepoliaRelayerUrl !== correctRelayerUrl) {
-        console.log('   ⚠️ SepoliaConfig had wrong URL (.cloud), overridden to .org');
-      }
-      
-      // Create FHE instance with config (per Zama docs)
-      // Per Zama docs: "const instance = await createInstance(config);"
+      // Create FHE instance with our custom config
       console.log('   Creating FHE instance (this may take a moment)...');
       console.log('   Note: This connects to Zama relayer gateway...');
       console.log('   Relayer URL:', correctRelayerUrl);
       
       // Add timeout and better error handling for network issues
+      // Reduce timeout to 15 seconds so we fail faster if URL is wrong
       const createInstancePromise = createInstance(config);
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Relayer connection timeout after 30 seconds')), 30000)
+        setTimeout(() => reject(new Error('Relayer connection timeout after 15 seconds - check relayer URL')), 15000)
       );
       
-      fhevmInstance = await Promise.race([createInstancePromise, timeoutPromise]);
-      
-      console.log('✓ FHE SDK initialized for Sepolia');
+      try {
+        fhevmInstance = await Promise.race([createInstancePromise, timeoutPromise]);
+        console.log('✓ FHE SDK initialized for Sepolia');
+      } catch (instanceError: any) {
+        // Log the exact error for debugging
+        console.error('❌ createInstance failed:', instanceError);
+        console.error('   Config used:', {
+          chainId: config.chainId,
+          gatewayChainId: config.gatewayChainId,
+          relayerUrl: config.relayerUrl,
+          hasNetwork: !!config.network,
+        });
+        throw instanceError; // Re-throw to be caught by outer catch
+      }
     } catch (error: any) {
       console.error('❌ Failed to initialize FHE SDK:', error);
       console.error('   Error details:', error?.message || error);
