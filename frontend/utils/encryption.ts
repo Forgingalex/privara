@@ -146,49 +146,67 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       console.log('   ✓ All required SDK exports verified');
       
       // Log SepoliaConfig to inspect configuration (for debugging)
-      // Per Zama docs, SepoliaConfig contains all network-specific settings
-      console.log('   SepoliaConfig:', {
+      // CRITICAL: SepoliaConfig has wrong relayerUrl (.cloud instead of .org)
+      console.log('   ⚠️ SepoliaConfig contains:', {
         chainId: SepoliaConfig?.chainId,
         gatewayChainId: (SepoliaConfig as any)?.gatewayChainId,
-        relayerUrl: (SepoliaConfig as any)?.relayerUrl || 'not visible in config',
+        relayerUrl: (SepoliaConfig as any)?.relayerUrl || 'not visible',
       });
+      const sepoliaRelayerUrl = (SepoliaConfig as any)?.relayerUrl;
+      if (sepoliaRelayerUrl && !sepoliaRelayerUrl.includes('.org')) {
+        console.warn('   ⚠️ WARNING: SepoliaConfig has wrong relayer URL:', sepoliaRelayerUrl);
+        console.warn('   Will override with correct URL (.org)');
+      }
       
       // Per Zama docs: "you need to load the WASM of TFHE first with initSDK"
       console.log('   Loading WASM modules...');
       await initSDK();
       console.log('   ✓ WASM modules loaded');
       
-      // Create config with network provider (per Zama docs pattern)
-      // Per Zama docs: "const config = { ...SepoliaConfig, network: window.ethereum };"
-      console.log('   Creating config...');
-      const config = {
-        ...SepoliaConfig,
+      // CRITICAL: Build config manually to avoid SepoliaConfig's wrong relayerUrl (.cloud)
+      // Only use the chain IDs from SepoliaConfig, but override ALL URL-related properties
+      console.log('   Creating config manually (overriding SepoliaConfig URLs)...');
+      
+      const correctRelayerUrl = process.env.NEXT_PUBLIC_ZAMA_RELAYER_URL || 'https://relayer.testnet.zama.org';
+      
+      // Build config from scratch, explicitly setting all URL-related properties
+      // Don't rely on SepoliaConfig for URLs - it has the wrong .cloud URL
+      const config: any = {
+        // Copy only the chain IDs from SepoliaConfig (these are correct)
+        chainId: SepoliaConfig?.chainId || 11155111,
+        gatewayChainId: (SepoliaConfig as any)?.gatewayChainId || 55815,
+        
+        // Set network provider
         network: window.ethereum,
-        // Use correct relayer URL from Zama docs: https://relayer.testnet.zama.org
-        // Can be overridden via NEXT_PUBLIC_ZAMA_RELAYER_URL environment variable
-        relayerUrl: process.env.NEXT_PUBLIC_ZAMA_RELAYER_URL || 'https://relayer.testnet.zama.org',
+        
+        // CRITICAL: Explicitly override ALL URL-related properties
+        // SepoliaConfig has wrong URL (.cloud), we must use .org
+        relayerUrl: correctRelayerUrl,
+        // Override gatewayUrl if it exists (some SDK versions use this)
+        gatewayUrl: correctRelayerUrl,
+        // Override any other URL variants
+        relayer: correctRelayerUrl,
       };
       
-      console.log('   Final config:', {
-        chainId: config.chainId,
-        gatewayChainId: (config as any)?.gatewayChainId,
-        network: config.network ? 'ethereum provider available' : 'no ethereum provider',
-        relayerUrl: (config as any)?.relayerUrl || 'using default from SepoliaConfig',
-      });
+      // Log what we're using
+      console.log('   ===== Custom Config (NOT using SepoliaConfig URLs) =====');
+      console.log('   chainId:', config.chainId);
+      console.log('   gatewayChainId:', config.gatewayChainId);
+      console.log('   network:', config.network ? 'ethereum provider available' : 'no ethereum provider');
+      console.log('   relayerUrl:', config.relayerUrl);
+      console.log('   gatewayUrl:', config.gatewayUrl);
+      console.log('   ====================================================');
       
-      // Log the relayer URL being used for debugging
-      const finalRelayerUrl = (config as any)?.relayerUrl;
-      if (finalRelayerUrl) {
-        console.log('   ✓ Relayer URL:', finalRelayerUrl);
+      console.log('   ✓ Using correct relayer URL:', correctRelayerUrl);
+      if (sepoliaRelayerUrl && sepoliaRelayerUrl !== correctRelayerUrl) {
+        console.log('   ⚠️ SepoliaConfig had wrong URL (.cloud), overridden to .org');
       }
       
       // Create FHE instance with config (per Zama docs)
       // Per Zama docs: "const instance = await createInstance(config);"
       console.log('   Creating FHE instance (this may take a moment)...');
       console.log('   Note: This connects to Zama relayer gateway...');
-      if ((config as any)?.relayerUrl) {
-        console.log('   Relayer URL:', (config as any).relayerUrl);
-      }
+      console.log('   Relayer URL:', correctRelayerUrl);
       
       // Add timeout and better error handling for network issues
       const createInstancePromise = createInstance(config);
