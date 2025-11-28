@@ -46,3 +46,4 @@ export default function NetworkSwitcher() {
   return null; // This component doesn't render anything
 }
 
+

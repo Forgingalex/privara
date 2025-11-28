@@ -14,3 +14,4 @@ if (typeof globalThis === 'undefined') {
 
 module.exports = globalThis;
 
+

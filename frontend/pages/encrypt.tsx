@@ -47,9 +47,47 @@ export default function EncryptPage() {
         const { initializeFHE, isRealFHE, validateMetrics } = encryptionUtils;
         
         // Initialize FHE SDK (will check for wallet internally)
-        await initializeFHE();
-        setFheReady(true);
-        setIsRealEncryption(isRealFHE());
+        try {
+          await initializeFHE();
+          setFheReady(true);
+          setIsRealEncryption(isRealFHE());
+        } catch (fheError: any) {
+          // Graceful error handling - don't crash the app
+          console.error('⚠️ FHE SDK initialization failed:', fheError);
+          
+          // Set a user-friendly error message
+          const errorMsg = fheError?.message || String(fheError) || 'Unknown error';
+          
+          // Check if it's a window-related error (SDK compatibility issue)
+          if (errorMsg.includes('window') || errorMsg.includes('is not defined')) {
+            setError(
+              'Unable to initialize FHE encryption due to browser compatibility issues. ' +
+              'Please try: (1) Refreshing the page, (2) Using a different browser, ' +
+              'or (3) Ensuring JavaScript and WebAssembly are enabled. ' +
+              'Error: ' + errorMsg
+            );
+          } else if (errorMsg.includes('wallet') || errorMsg.includes('provider')) {
+            setError('Please connect your wallet first before initializing encryption.');
+          } else {
+            setError(
+              'Failed to initialize FHE encryption. Please try refreshing the page. ' +
+              'If the issue persists, there may be a compatibility issue with your browser. ' +
+              'Error: ' + errorMsg
+            );
+          }
+          
+          // Set to demo mode so user can still see the page
+          setIsRealEncryption(false);
+          setFheReady(false);
+          
+          // Still load metrics so the page doesn't break
+          const data = generateMockTwitterMetrics();
+          if (validateMetrics(data)) {
+            setMetrics(data);
+          }
+          
+          return; // Exit early, but don't throw
+        }
         
         // Load metrics
         const data = generateMockTwitterMetrics();

@@ -39,12 +39,34 @@ export default function DecryptPage() {
         const encryptionUtils = await import('../utils/encryption');
         const { initializeFHE, isRealFHE } = encryptionUtils;
         
-        await initializeFHE();
-        setIsDemoMode(!isRealFHE() || !isRealContract);
+        try {
+          await initializeFHE();
+          setIsDemoMode(!isRealFHE() || !isRealContract);
+        } catch (fheError: any) {
+          // Graceful error handling - don't crash the app
+          console.error('⚠️ FHE SDK initialization failed:', fheError);
+          const errorMsg = fheError?.message || String(fheError) || 'Unknown error';
+          
+          // Set user-friendly error message
+          if (errorMsg.includes('window') || errorMsg.includes('is not defined')) {
+            setError(
+              'Unable to initialize FHE encryption. Please try refreshing the page or using a different browser.'
+            );
+          } else {
+            setError(
+              'Failed to initialize FHE encryption. The page will work in demo mode. ' +
+              'Please try refreshing if you need full functionality.'
+            );
+          }
+          
+          // Set to demo mode so user can still use the page
+          setIsDemoMode(true);
+        }
       } catch (err: any) {
         console.error('Failed to initialize FHE:', err);
         // Don't block the page, just set demo mode
         setIsDemoMode(true);
+        setError('Failed to load encryption utilities. Please try refreshing the page.');
       }
     };
     init();

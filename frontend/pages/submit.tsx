@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { parseHexPayload, isRealFHE } from '../utils/encryption';
+// Lazy-load encryption utils to prevent SSR issues
 
 // Privara Contract ABI (includes hasUserSubmitted check)
 const PRIVARA_ABI = [
@@ -125,15 +125,19 @@ export default function SubmitPage() {
         }
       }
       
-      // Fallback: parse from hex payload
+      // Fallback: parse from hex payload (lazy-load to prevent SSR issues)
       if (!storedHandles) {
-        try {
-          const { handles: h, inputProof: p } = parseHexPayload(stored);
-          setHandles(h);
-          setInputProof(p);
-        } catch (e) {
-          console.warn('Could not parse encrypted payload');
-        }
+        (async () => {
+          try {
+            const encryptionUtils = await import('../utils/encryption');
+            const { parseHexPayload } = encryptionUtils;
+            const { handles: h, inputProof: p } = parseHexPayload(stored);
+            setHandles(h);
+            setInputProof(p);
+          } catch (e) {
+            console.warn('Could not parse encrypted payload:', e);
+          }
+        })();
       }
     } else {
       router.push('/encrypt');
@@ -263,10 +267,20 @@ export default function SubmitPage() {
     resetCompute?.();
 
     // Check if real FHE encryption is being used (required for real contract)
-    if (!isDemoMode && contractAddress && !isRealFHE()) {
-      setError('Real FHE encryption is required for contract submission. The Zama FHE SDK is not properly initialized or is using mock encryption. Please refresh the page and try again. If the issue persists, the FHE SDK may need to be installed or configured properly.');
-      setIsSubmitting(false);
-      return;
+    // Lazy-load to prevent SSR issues
+    try {
+      const encryptionUtils = await import('../utils/encryption');
+      const { isRealFHE } = encryptionUtils;
+      
+      if (!isDemoMode && contractAddress && !isRealFHE()) {
+        setError('Real FHE encryption is required for contract submission. The Zama FHE SDK is not properly initialized or is using mock encryption. Please refresh the page and try again. If the issue persists, the FHE SDK may need to be installed or configured properly.');
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (err: any) {
+      console.error('Failed to check FHE status:', err);
+      // Continue with submission attempt even if check fails
+      // The contract will reject if encryption is invalid anyway
     }
 
     // Check if user has already submitted (for real contract only)
@@ -433,8 +447,11 @@ export default function SubmitPage() {
       localStorage.setItem('submissionTxHash', mockTxHash);
       
       // Simulate computing reputation
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
+          // Lazy-load to prevent SSR issues
+          const encryptionUtils = await import('../utils/encryption');
+          const { parseHexPayload } = encryptionUtils;
           const { handles: h } = parseHexPayload(encryptedPayload);
           // Generate deterministic mock results based on handle data
           const seed = h.reduce((acc, handle) => acc + handle.reduce((a, b) => a + b, 0), 0);

@@ -182,19 +182,73 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       }
       
       // Per Zama docs: "you need to load the WASM of TFHE first with initSDK"
+      // AGGRESSIVE FIX: Wrap initSDK with retry logic and longer delays
+      // The SDK's WASM loader may access window in ways that fail initially
       
-      // CRITICAL: Verify browser is fully ready before calling initSDK()
-      // initSDK() loads WASM which may access window internally
+      // Verify browser environment
       if (typeof window === 'undefined' || !window.document || typeof document === 'undefined') {
         throw new Error('Browser environment not ready - cannot load WASM modules');
       }
       
-      // Small delay to ensure browser environment is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait longer to ensure browser is fully initialized
+      console.log('   Waiting for browser environment to stabilize...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Additional verification
+      if (typeof window === 'undefined' || !window || typeof self === 'undefined') {
+        throw new Error('Browser globals not available');
+      }
       
       console.log('   Loading WASM modules...');
-      await initSDK();
-      console.log('   ✓ WASM modules loaded');
+      
+      // Retry logic for initSDK - the SDK's WASM loader may fail initially
+      let initSDKSuccess = false;
+      let lastError: any = null;
+      const maxRetries = 3;
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            const delayMs = 1000 * attempt;
+            console.log(`   ⚠️ Retry ${attempt + 1}/${maxRetries} after ${delayMs}ms delay...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            
+            // Re-verify browser environment before retry
+            if (typeof window === 'undefined' || typeof document === 'undefined') {
+              throw new Error('Browser environment lost during retry');
+            }
+          }
+          
+          await initSDK();
+          initSDKSuccess = true;
+          console.log('   ✓ WASM modules loaded');
+          break;
+        } catch (retryError: any) {
+          lastError = retryError;
+          const errorMsg = String(retryError?.message || retryError || '');
+          
+          console.warn(`   Attempt ${attempt + 1} failed:`, errorMsg);
+          
+          // Only retry if it's a window-related error
+          if (errorMsg.includes('window') || errorMsg.includes('is not defined')) {
+            if (attempt < maxRetries - 1) {
+              continue; // Retry
+            }
+          } else {
+            // Non-window error, fail immediately
+            throw retryError;
+          }
+        }
+      }
+      
+      if (!initSDKSuccess) {
+        throw new Error(
+          `FHE SDK initSDK() failed after ${maxRetries} attempts. ` +
+          `Last error: ${lastError?.message || lastError}. ` +
+          `The SDK's WASM loader cannot access window. ` +
+          `This may indicate a browser compatibility issue or SDK bug.`
+        );
+      }
       
       // CRITICAL: Build config completely from scratch - don't use SepoliaConfig at all
       // This ensures SDK can't use SepoliaConfig's wrong .cloud URL internally
