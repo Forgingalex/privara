@@ -111,13 +111,11 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
     }
     
     try {
-      // Use standard import path (per Zama official documentation)
-      // The standard import automatically handles browser/node environments
-      // Use dynamic import to avoid SSR issues and type checking errors during build
-      console.log('   Importing SDK module...');
-      // @ts-expect-error - Package may not have type definitions or may not resolve during build
-      // but the package is installed and works at runtime
-      const sdkModule: any = await import('@zama-fhe/relayer-sdk');
+      // Use /web export path for browser environments (per Zama package exports)
+      // The package uses package.json exports field - root path (.) is not exported
+      // Must use specific export paths: /web for browser, /bundle for pre-bundled, /node for Node.js
+      console.log('   Importing SDK module from /web export...');
+      const sdkModule: any = await import('@zama-fhe/relayer-sdk/web');
       
       // Verify the module loaded correctly
       if (!sdkModule || typeof sdkModule !== 'object') {
