@@ -4,7 +4,6 @@ import { usePrivy } from '@privy-io/react-auth';
 import { 
   generateMockTwitterMetrics
 } from '../utils/twitter';
-import { initializeFHE } from '../utils/encryption';
 import Link from 'next/link';
 
 export default function Home() {

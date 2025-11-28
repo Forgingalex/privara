@@ -4,6 +4,7 @@
 
 import type { AppProps } from 'next/app';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 import '../styles/globals.css';
 
@@ -63,7 +64,67 @@ const Providers = dynamic(() => import('../components/Providers'), {
   ),
 });
 
+// Loading component for client-only pages
+const LoadingComponent = () => (
+  <div style={{
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'white'
+  }}>
+    Loading...
+  </div>
+);
+
+// Pages that use encryption/FHE SDK - must be client-only to prevent SSR issues
+// These pages import/use the Zama FHE SDK which accesses 'window' and cannot run during SSR
+const ClientOnlyEncryptPage = dynamic(() => import('./encrypt'), {
+  ssr: false,
+  loading: LoadingComponent,
+});
+
+const ClientOnlyDecryptPage = dynamic(() => import('./decrypt'), {
+  ssr: false,
+  loading: LoadingComponent,
+});
+
+const ClientOnlySubmitPage = dynamic(() => import('./submit'), {
+  ssr: false,
+  loading: LoadingComponent,
+});
+
 export default function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
+  
+  // Render client-only versions for encryption-dependent pages
+  // These pages use the FHE SDK which requires browser environment (window object)
+  if (router.pathname === '/encrypt') {
+    return (
+      <Providers>
+        <ClientOnlyEncryptPage {...pageProps} />
+      </Providers>
+    );
+  }
+  
+  if (router.pathname === '/decrypt') {
+    return (
+      <Providers>
+        <ClientOnlyDecryptPage {...pageProps} />
+      </Providers>
+    );
+  }
+  
+  if (router.pathname === '/submit') {
+    return (
+      <Providers>
+        <ClientOnlySubmitPage {...pageProps} />
+      </Providers>
+    );
+  }
+  
+  // Render normal component for other pages (can use SSR)
   return (
     <Providers>
       <Component {...pageProps} />
