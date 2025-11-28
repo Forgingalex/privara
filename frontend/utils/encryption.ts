@@ -111,41 +111,53 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
     }
     
     try {
-      // Use dynamic import - webpack will bundle it properly now
-      // Import from the main package entry point
-      const sdkModule = await import('@zama-fhe/relayer-sdk/web');
+      // Use bundled version for web applications (per Zama docs recommendation)
+      // The /bundle version includes all WASM and dependencies pre-bundled
+      // Per Zama docs: "If you encounter issues with bundling the library, 
+      // especially with SSR frameworks... Use the prebundled version"
+      const sdkModule = await import('@zama-fhe/relayer-sdk/bundle');
       const { initSDK, createInstance, SepoliaConfig } = sdkModule;
       
       // Log SepoliaConfig to inspect configuration (for debugging)
+      // Per Zama docs, SepoliaConfig contains all network-specific settings
       console.log('   SepoliaConfig:', {
         chainId: SepoliaConfig?.chainId,
-        // Note: Relayer URL is internal to the SDK config
+        gatewayChainId: (SepoliaConfig as any)?.gatewayChainId,
+        relayerUrl: (SepoliaConfig as any)?.relayerUrl || 'not visible in config',
       });
       
-      // Initialize WASM modules first (required for SDK to work)
+      // Per Zama docs: "you need to load the WASM of TFHE first with initSDK"
       console.log('   Loading WASM modules...');
       await initSDK();
       console.log('   ✓ WASM modules loaded');
       
-      // Create config with network provider (required for wallet integration)
-      // Note: Contract address is not passed to createInstance config
-      // but is used later in createEncryptedInput()
+      // Create config with network provider (per Zama docs pattern)
+      // Per Zama docs: "const config = { ...SepoliaConfig, network: window.ethereum };"
       console.log('   Creating config...');
       const config = {
         ...SepoliaConfig,
         network: window.ethereum,
+        // Optionally override relayer URL if DNS resolution fails
+        // Uncomment the line below if you need to force the relayer URL
+        // relayerUrl: 'https://relayer.testnet.zama.cloud',
       };
       
-      console.log('   Config:', {
+      console.log('   Final config:', {
         chainId: config.chainId,
+        gatewayChainId: (config as any)?.gatewayChainId,
         network: config.network ? 'ethereum provider available' : 'no ethereum provider',
+        relayerUrl: (config as any)?.relayerUrl || 'using default from SepoliaConfig',
       });
       
-      // Create FHE instance with Sepolia config
+      // Create FHE instance with config (per Zama docs)
+      // Per Zama docs: "const instance = await createInstance(config);"
       console.log('   Creating FHE instance (this may take a moment)...');
       console.log('   Note: This connects to Zama relayer gateway...');
+      if ((config as any)?.relayerUrl) {
+        console.log('   Relayer URL:', (config as any).relayerUrl);
+      }
       
-      // Add timeout and better error handling
+      // Add timeout and better error handling for network issues
       const createInstancePromise = createInstance(config);
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Relayer connection timeout after 30 seconds')), 30000)
