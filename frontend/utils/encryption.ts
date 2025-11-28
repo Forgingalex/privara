@@ -78,8 +78,10 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
   if (fhevmInstance) return;
 
   // Only initialize in browser environment
+  // Return silently during SSR to avoid errors
   if (typeof window === 'undefined') {
-    throw new Error('FHE SDK can only be initialized in browser');
+    console.warn('⚠️ FHE SDK initialization skipped - running in server environment');
+    return;
   }
 
   // CRITICAL: Require wallet provider before initialization (fhedback approach)
@@ -111,11 +113,32 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
     }
     
     try {
+      // CRITICAL: Double-check we're in browser before importing SDK
+      // The SDK module itself might try to access window during import
+      if (typeof window === 'undefined') {
+        throw new Error('Cannot import FHE SDK during server-side rendering');
+      }
+      
+      // Additional safety check - ensure we're not in Node.js environment
+      if (typeof process !== 'undefined' && process.env && !process.browser) {
+        throw new Error('FHE SDK can only be imported in browser environment');
+      }
+      
       // Use /web export path for browser environments (per Zama package exports)
       // The package uses package.json exports field - root path (.) is not exported
       // Must use specific export paths: /web for browser, /bundle for pre-bundled, /node for Node.js
       console.log('   Importing SDK module from /web export...');
-      const sdkModule: any = await import('@zama-fhe/relayer-sdk/web');
+      
+      // Wrap import to ensure it only executes in browser
+      // Use a function to prevent Next.js from analyzing this during SSR
+      const importSDK = async () => {
+        if (typeof window === 'undefined') {
+          throw new Error('window is not defined - cannot import SDK');
+        }
+        return await import('@zama-fhe/relayer-sdk/web');
+      };
+      
+      const sdkModule: any = await importSDK();
       
       // Verify the module loaded correctly
       if (!sdkModule || typeof sdkModule !== 'object') {
