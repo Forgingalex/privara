@@ -54,6 +54,17 @@ const nextConfig = {
       })
     );
     
+    // CRITICAL: Ignore Zama FHE SDK during server-side builds
+    // The SDK accesses 'window' and cannot run in Node.js/SSR environment
+    // Only bundle it for client-side code to prevent "window is not defined" errors
+    if (isServer) {
+      config.plugins.push(
+        new (require('webpack').IgnorePlugin)({
+          resourceRegExp: /^@zama-fhe\/relayer-sdk/,
+        })
+      );
+    }
+    
     // Configure WASM support for Zama FHE SDK (only on client side)
     if (!isServer) {
       const webpack = require('webpack');

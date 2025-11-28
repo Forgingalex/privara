@@ -29,6 +29,14 @@ export default function Providers({ children }: ProvidersProps) {
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmidrkb1x0115jr0cnwwzzqp2"}
       config={{
         loginMethods: ['wallet'],
+        // Explicitly disable Solana to silence warning (we only use Ethereum)
+        externalWallets: {
+          solana: {
+            connectors: [], // Empty array = disabled
+          },
+        },
+        // Explicitly set wallet-first since we only have wallet login
+        showWalletLoginFirst: true,
         appearance: {
           theme: 'dark',
         },
