@@ -111,12 +111,38 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
     }
     
     try {
-      // Use bundled version for web applications (per Zama docs recommendation)
-      // The /bundle version includes all WASM and dependencies pre-bundled
-      // Per Zama docs: "If you encounter issues with bundling the library, 
-      // especially with SSR frameworks... Use the prebundled version"
-      const sdkModule = await import('@zama-fhe/relayer-sdk/bundle');
+      // Use standard import path (per Zama official documentation)
+      // The standard import automatically handles browser/node environments
+      console.log('   Importing SDK module...');
+      const sdkModule = await import('@zama-fhe/relayer-sdk');
+      
+      // Verify the module loaded correctly
+      if (!sdkModule || typeof sdkModule !== 'object') {
+        throw new Error('SDK module failed to load - module is undefined or invalid');
+      }
+      
+      console.log('   SDK module loaded, available exports:', Object.keys(sdkModule));
+      
+      // Extract required exports
       const { initSDK, createInstance, SepoliaConfig } = sdkModule;
+      
+      // Verify required exports exist
+      if (!initSDK || typeof initSDK !== 'function') {
+        throw new Error(
+          `initSDK is not exported from SDK module. ` +
+          `Available exports: ${Object.keys(sdkModule).join(', ')}`
+        );
+      }
+      
+      if (!createInstance || typeof createInstance !== 'function') {
+        throw new Error('createInstance is not exported from SDK module');
+      }
+      
+      if (!SepoliaConfig || typeof SepoliaConfig !== 'object') {
+        throw new Error('SepoliaConfig is not exported from SDK module');
+      }
+      
+      console.log('   ✓ All required SDK exports verified');
       
       // Log SepoliaConfig to inspect configuration (for debugging)
       // Per Zama docs, SepoliaConfig contains all network-specific settings
