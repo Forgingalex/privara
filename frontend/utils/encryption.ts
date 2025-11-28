@@ -137,9 +137,9 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
       const config = {
         ...SepoliaConfig,
         network: window.ethereum,
-        // Optionally override relayer URL if DNS resolution fails
-        // Uncomment the line below if you need to force the relayer URL
-        // relayerUrl: 'https://relayer.testnet.zama.cloud',
+        // Use correct relayer URL from Zama docs: https://relayer.testnet.zama.org
+        // Can be overridden via NEXT_PUBLIC_ZAMA_RELAYER_URL environment variable
+        relayerUrl: process.env.NEXT_PUBLIC_ZAMA_RELAYER_URL || 'https://relayer.testnet.zama.org',
       };
       
       console.log('   Final config:', {
@@ -148,6 +148,12 @@ export async function initializeFHE(contractAddr?: string): Promise<void> {
         network: config.network ? 'ethereum provider available' : 'no ethereum provider',
         relayerUrl: (config as any)?.relayerUrl || 'using default from SepoliaConfig',
       });
+      
+      // Log the relayer URL being used for debugging
+      const finalRelayerUrl = (config as any)?.relayerUrl;
+      if (finalRelayerUrl) {
+        console.log('   ✓ Relayer URL:', finalRelayerUrl);
+      }
       
       // Create FHE instance with config (per Zama docs)
       // Per Zama docs: "const instance = await createInstance(config);"
