@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   
+  // CRITICAL: Transpile Zama FHE SDK package (required for Next.js)
+  transpilePackages: ['@zama-fhe/relayer-sdk'],
+  
   // Increase build timeout for pages with heavy dependencies
   staticPageGenerationTimeout: 180,
   

@@ -5,8 +5,8 @@
 import type { AppProps } from 'next/app';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
-import { useEffect } from 'react';
 import '../styles/globals.css';
+import { FHEProvider } from '../context/FHEContext';
 
 // Polyfill for 'global' variable in browser (needed for Zama FHE SDK)
 // Must run before any SDK code loads
@@ -103,7 +103,9 @@ export default function App({ Component, pageProps }: AppProps) {
   if (router.pathname === '/encrypt') {
     return (
       <Providers>
-        <ClientOnlyEncryptPage {...pageProps} />
+        <FHEProvider>
+          <ClientOnlyEncryptPage {...pageProps} />
+        </FHEProvider>
       </Providers>
     );
   }
@@ -111,7 +113,9 @@ export default function App({ Component, pageProps }: AppProps) {
   if (router.pathname === '/decrypt') {
     return (
       <Providers>
-        <ClientOnlyDecryptPage {...pageProps} />
+        <FHEProvider>
+          <ClientOnlyDecryptPage {...pageProps} />
+        </FHEProvider>
       </Providers>
     );
   }
@@ -119,7 +123,9 @@ export default function App({ Component, pageProps }: AppProps) {
   if (router.pathname === '/submit') {
     return (
       <Providers>
-        <ClientOnlySubmitPage {...pageProps} />
+        <FHEProvider>
+          <ClientOnlySubmitPage {...pageProps} />
+        </FHEProvider>
       </Providers>
     );
   }

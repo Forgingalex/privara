@@ -2,19 +2,22 @@ import { useState, useEffect } from 'react';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { useFHE } from '../context/FHEContext';
 import type { ReputationVector } from '../utils/encryption';
+import { decryptResultDemo } from '../utils/encryption';
 
 export default function DecryptPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
+  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady } = useFHE();
   const [reputation, setReputation] = useState<ReputationVector | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSubmission, setHasSubmission] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(true);
   
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
   const isRealContract = contractAddress && contractAddress !== '0x0000000000000000000000000000000000000001';
+  const isDemoMode = !fheReady || !isRealContract;
 
   useEffect(() => {
     if (!isConnected) {
@@ -22,54 +25,13 @@ export default function DecryptPage() {
       return;
     }
     
-    // Initialize FHE and check mode (wait for wallet to be ready)
-    const init = async () => {
-      try {
-        // Wait for wallet provider to be ready
-        if (!window.ethereum) {
-          console.warn('Ethereum provider not available yet');
-          return;
-        }
-        
-        // Give wallet a moment to initialize
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // CRITICAL: Lazy-load encryption utils only after component mounts in browser
-        // This prevents any SDK code from executing during module import/evaluation
-        const encryptionUtils = await import('../utils/encryption');
-        const { initializeFHE, isRealFHE } = encryptionUtils;
-        
-        try {
-          await initializeFHE();
-          setIsDemoMode(!isRealFHE() || !isRealContract);
-        } catch (fheError: any) {
-          // Graceful error handling - don't crash the app
-          console.error('⚠️ FHE SDK initialization failed:', fheError);
-          const errorMsg = fheError?.message || String(fheError) || 'Unknown error';
-          
-          // Set user-friendly error message
-          if (errorMsg.includes('window') || errorMsg.includes('is not defined')) {
-            setError(
-              'Unable to initialize FHE encryption. Please try refreshing the page or using a different browser.'
-            );
-          } else {
-            setError(
-              'Failed to initialize FHE encryption. The page will work in demo mode. ' +
-              'Please try refreshing if you need full functionality.'
-            );
-          }
-          
-          // Set to demo mode so user can still use the page
-          setIsDemoMode(true);
-        }
-      } catch (err: any) {
-        console.error('Failed to initialize FHE:', err);
-        // Don't block the page, just set demo mode
-        setIsDemoMode(true);
-        setError('Failed to load encryption utilities. Please try refreshing the page.');
-      }
-    };
-    init();
+    // Display FHE initialization errors
+    if (fheError) {
+      setError(
+        'FHE SDK initialization failed: ' + fheError + '. ' +
+        'The page will work in demo mode. Please try refreshing if you need full functionality.'
+      );
+    }
     
     // Check for existing submission
     const submitted = localStorage.getItem('submittedPayload');
@@ -111,15 +73,19 @@ export default function DecryptPage() {
       
       console.log('🔓 Decrypting reputation...');
       
-      // Lazy-load encryption utils
-      const encryptionUtils = await import('../utils/encryption');
-      const { decryptResultDemo } = encryptionUtils;
+      // In demo mode or if FHE not ready, show error
+      if (isDemoMode || !fheInstance) {
+        throw new Error(
+          'Real FHE decryption is required. Please ensure FHE SDK is initialized and connected to a real contract.'
+        );
+      }
       
-      // Use demo decryption (TODO: implement real FHE decryption for production)
-      const rep = await decryptResultDemo(payload);
-      setReputation(rep);
-      localStorage.setItem('computedReputation', JSON.stringify(rep));
-      console.log('✅ Reputation decrypted:', rep);
+      // TODO: Implement real decryption using fheInstance and decryptResult
+      // For now, show error indicating real decryption is needed
+      throw new Error(
+        'Real FHE decryption is not yet implemented in this flow. ' +
+        'Please use the contract\'s computeReputation and then decrypt via the SDK.'
+      );
       
     } catch (err: any) {
       console.error('Decryption failed:', err);

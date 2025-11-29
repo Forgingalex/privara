@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useRouter } from 'next/router';
+import { useFHE } from '../context/FHEContext';
 import type { TwitterMetrics } from '../utils/encryption';
+import { encryptMetrics, validateMetrics } from '../utils/encryption';
 import { generateMockTwitterMetrics } from '../utils/twitter';
 import Link from 'next/link';
 
 export default function EncryptPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
+  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady } = useFHE();
   const [metrics, setMetrics] = useState<TwitterMetrics | null>(null);
   const [encryptedData, setEncryptedData] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fheReady, setFheReady] = useState(false);
-  const [isRealEncryption, setIsRealEncryption] = useState(false);
 
   useEffect(() => {
     if (!isConnected) {
@@ -27,98 +28,34 @@ export default function EncryptPage() {
       return;
     }
 
-    const initialize = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        // Wait for wallet to be fully ready (fhedback approach)
-        if (!window.ethereum) {
-          setError('Please connect your wallet first');
-          return;
-        }
-        
-        // Give wallet provider a moment to initialize
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // CRITICAL: Lazy-load encryption utils only after component mounts in browser
-        // This prevents any SDK code from executing during module import/evaluation
-        const encryptionUtils = await import('../utils/encryption');
-        const { initializeFHE, isRealFHE, validateMetrics } = encryptionUtils;
-        
-        // Initialize FHE SDK (will check for wallet internally)
-        try {
-          await initializeFHE();
-          setFheReady(true);
-          setIsRealEncryption(isRealFHE());
-        } catch (fheError: any) {
-          // Graceful error handling - don't crash the app
-          console.error('⚠️ FHE SDK initialization failed:', fheError);
-          
-          // Set a user-friendly error message
-          const errorMsg = fheError?.message || String(fheError) || 'Unknown error';
-          
-          // Check if it's a window-related error (SDK compatibility issue)
-          if (errorMsg.includes('window') || errorMsg.includes('is not defined')) {
-            setError(
-              'Unable to initialize FHE encryption due to browser compatibility issues. ' +
-              'Please try: (1) Refreshing the page, (2) Using a different browser, ' +
-              'or (3) Ensuring JavaScript and WebAssembly are enabled. ' +
-              'Error: ' + errorMsg
-            );
-          } else if (errorMsg.includes('wallet') || errorMsg.includes('provider')) {
-            setError('Please connect your wallet first before initializing encryption.');
-          } else {
-            setError(
-              'Failed to initialize FHE encryption. Please try refreshing the page. ' +
-              'If the issue persists, there may be a compatibility issue with your browser. ' +
-              'Error: ' + errorMsg
-            );
-          }
-          
-          // Set to demo mode so user can still see the page
-          setIsRealEncryption(false);
-          setFheReady(false);
-          
-          // Still load metrics so the page doesn't break
-          const data = generateMockTwitterMetrics();
-          if (validateMetrics(data)) {
-            setMetrics(data);
-          }
-          
-          return; // Exit early, but don't throw
-        }
-        
-        // Load metrics
-        const data = generateMockTwitterMetrics();
-        if (!validateMetrics(data)) {
-          setError('Invalid metrics data');
-          return;
-        }
-        setMetrics(data);
-      } catch (err: any) {
-        console.error('FHE initialization error:', err);
-        setError(`Failed to initialize: ${err.message || 'Unknown error'}`);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Load metrics
+    const data = generateMockTwitterMetrics();
+    if (!validateMetrics(data)) {
+      setError('Invalid metrics data');
+      return;
+    }
+    setMetrics(data);
 
-    initialize();
-  }, [isConnected, router]);
+    // Display FHE initialization errors
+    if (fheError) {
+      setError(
+        'FHE SDK initialization failed: ' + fheError + '. ' +
+        'Please refresh the page and ensure your wallet is connected.'
+      );
+    }
+  }, [isConnected, router, fheError]);
 
   const handleEncrypt = async () => {
-    if (!metrics || !address) return;
+    if (!metrics || !address || !fheInstance) {
+      setError('FHE SDK not ready. Please wait for initialization or refresh the page.');
+      return;
+    }
     
     setLoading(true);
     setError(null);
     
     try {
-      // Lazy-load encryption utils
-      const encryptionUtils = await import('../utils/encryption');
-      const { encryptMetrics, isRealFHE: isRealFHECheck } = encryptionUtils;
-      
-      const result = await encryptMetrics(metrics, address);
+      const result = await encryptMetrics(fheInstance, metrics, address);
       setEncryptedData(result.hexPayload);
       
       // Store encrypted data for contract submission
@@ -131,7 +68,7 @@ export default function EncryptPage() {
       ));
       
       console.log('✅ Encryption complete');
-      console.log('   Real FHE:', isRealFHECheck());
+      console.log('   Real FHE: true (via FHEProvider)');
       console.log('   Payload size:', result.hexPayload.length, 'chars');
     } catch (err: any) {
       setError(err.message || 'Encryption failed');
@@ -155,8 +92,8 @@ export default function EncryptPage() {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)', padding: '2rem' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto', paddingTop: '4rem' }}>
         <h1 style={{ color: 'white', fontSize: '2rem', marginBottom: '0.5rem', textAlign: 'center' }}>Encrypt Metrics</h1>
-        <p style={{ color: isRealEncryption ? '#22c55e' : '#fbbf24', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
-          {isRealEncryption ? '🔐 Using Zama FHE (Real Encryption)' : '⚠️ Using Mock Encryption (Demo Mode)'}
+        <p style={{ color: fheReady ? '#22c55e' : fheLoading ? '#fbbf24' : '#ef4444', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
+          {fheLoading ? '⏳ Initializing FHE SDK...' : fheReady ? '🔐 Using Zama FHE (Real Encryption)' : '⚠️ FHE SDK Not Ready'}
         </p>
         
         <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>
@@ -190,21 +127,21 @@ export default function EncryptPage() {
 
           <button
             onClick={handleEncrypt}
-            disabled={loading || !!encryptedData}
+            disabled={loading || !!encryptedData || !fheReady || fheLoading}
             style={{
               width: '100%',
-              background: encryptedData ? '#6b7280' : '#FEDA15',
+              background: encryptedData ? '#6b7280' : (!fheReady || fheLoading) ? '#9ca3af' : '#FEDA15',
               color: '#000',
               borderRadius: '9999px',
               fontWeight: 'bold',
               padding: '14px 32px',
               fontSize: '16px',
               border: 'none',
-              cursor: encryptedData ? 'not-allowed' : 'pointer',
+              cursor: (encryptedData || !fheReady || fheLoading) ? 'not-allowed' : 'pointer',
               marginBottom: '1rem'
             }}
           >
-            {loading ? 'Encrypting...' : encryptedData ? '✓ Done' : 'Encrypt Metrics'}
+            {fheLoading ? 'Initializing...' : loading ? 'Encrypting...' : encryptedData ? '✓ Done' : !fheReady ? 'Waiting for FHE SDK...' : 'Encrypt Metrics'}
           </button>
 
           {encryptedData && (

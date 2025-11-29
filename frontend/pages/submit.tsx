@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-// Lazy-load encryption utils to prevent SSR issues
+import { useFHE } from '../context/FHEContext';
+import { parseHexPayload } from '../utils/encryption';
 
 // Privara Contract ABI (includes hasUserSubmitted check)
 const PRIVARA_ABI = [
@@ -39,6 +40,7 @@ const PRIVARA_ABI = [
 export default function SubmitPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
+  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady } = useFHE();
   const [encryptedPayload, setEncryptedPayload] = useState<string>('');
   const [handles, setHandles] = useState<Uint8Array[]>([]);
   const [inputProof, setInputProof] = useState<Uint8Array | null>(null);
@@ -47,12 +49,12 @@ export default function SubmitPage() {
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txFailed, setTxFailed] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(false);
   const [step, setStep] = useState<'submit' | 'compute'>('submit');
   const [checkingSubmission, setCheckingSubmission] = useState(false);
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}` | undefined;
   const isRealContract = contractAddress && contractAddress !== '0x0000000000000000000000000000000000000001';
+  const isDemoMode = !fheReady || !isRealContract;
 
   // Contract write hooks with error handling
   const { 
@@ -125,26 +127,19 @@ export default function SubmitPage() {
         }
       }
       
-      // Fallback: parse from hex payload (lazy-load to prevent SSR issues)
+      // Fallback: parse from hex payload
       if (!storedHandles) {
-        (async () => {
-          try {
-            const encryptionUtils = await import('../utils/encryption');
-            const { parseHexPayload } = encryptionUtils;
-            const { handles: h, inputProof: p } = parseHexPayload(stored);
-            setHandles(h);
-            setInputProof(p);
-          } catch (e) {
-            console.warn('Could not parse encrypted payload:', e);
-          }
-        })();
+        try {
+          const { handles: h, inputProof: p } = parseHexPayload(stored);
+          setHandles(h);
+          setInputProof(p);
+        } catch (e) {
+          console.warn('Could not parse encrypted payload:', e);
+        }
       }
     } else {
       router.push('/encrypt');
     }
-    
-    // Check if we should use demo mode
-    setIsDemoMode(!isRealContract);
   }, [isConnected, router, isRealContract]);
 
   // Check submission status when address or contract changes
@@ -267,20 +262,16 @@ export default function SubmitPage() {
     resetCompute?.();
 
     // Check if real FHE encryption is being used (required for real contract)
-    // Lazy-load to prevent SSR issues
-    try {
-      const encryptionUtils = await import('../utils/encryption');
-      const { isRealFHE } = encryptionUtils;
-      
-      if (!isDemoMode && contractAddress && !isRealFHE()) {
-        setError('Real FHE encryption is required for contract submission. The Zama FHE SDK is not properly initialized or is using mock encryption. Please refresh the page and try again. If the issue persists, the FHE SDK may need to be installed or configured properly.');
-        setIsSubmitting(false);
-        return;
-      }
-    } catch (err: any) {
-      console.error('Failed to check FHE status:', err);
-      // Continue with submission attempt even if check fails
-      // The contract will reject if encryption is invalid anyway
+    if (!isDemoMode && contractAddress && !fheReady) {
+      setError('Real FHE encryption is required for contract submission. The Zama FHE SDK is not properly initialized. Please refresh the page and ensure your wallet is connected.');
+      setIsSubmitting(false);
+      return;
+    }
+    
+    if (!isDemoMode && contractAddress && !fheInstance) {
+      setError('FHE instance is not available. Please wait for FHE SDK initialization or refresh the page.');
+      setIsSubmitting(false);
+      return;
     }
 
     // Check if user has already submitted (for real contract only)
@@ -447,11 +438,8 @@ export default function SubmitPage() {
       localStorage.setItem('submissionTxHash', mockTxHash);
       
       // Simulate computing reputation
-      setTimeout(async () => {
+      setTimeout(() => {
         try {
-          // Lazy-load to prevent SSR issues
-          const encryptionUtils = await import('../utils/encryption');
-          const { parseHexPayload } = encryptionUtils;
           const { handles: h } = parseHexPayload(encryptedPayload);
           // Generate deterministic mock results based on handle data
           const seed = h.reduce((acc, handle) => acc + handle.reduce((a, b) => a + b, 0), 0);
