@@ -10,7 +10,7 @@ import Link from 'next/link';
 export default function EncryptPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady } = useFHE();
+  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady, isInitialized } = useFHE();
   const [metrics, setMetrics] = useState<TwitterMetrics | null>(null);
   const [encryptedData, setEncryptedData] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -92,8 +92,8 @@ export default function EncryptPage() {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)', padding: '2rem' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto', paddingTop: '4rem' }}>
         <h1 style={{ color: 'white', fontSize: '2rem', marginBottom: '0.5rem', textAlign: 'center' }}>Encrypt Metrics</h1>
-        <p style={{ color: fheReady ? '#22c55e' : fheLoading ? '#fbbf24' : '#ef4444', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
-          {fheLoading ? '⏳ Initializing FHE SDK...' : fheReady ? '🔐 Using Zama FHE (Real Encryption)' : '⚠️ FHE SDK Not Ready'}
+        <p style={{ color: isInitialized ? '#22c55e' : fheLoading ? '#fbbf24' : '#ef4444', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
+          {!isInitialized ? (fheLoading ? '⏳ Loading FHE...' : '⚠️ FHE SDK Not Ready') : '🔐 Using Zama FHE (Real Encryption)'}
         </p>
         
         <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>

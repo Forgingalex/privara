@@ -4,11 +4,12 @@
  * 
  * CRITICAL: All functions now require FhevmInstance to be passed in
  * This prevents any SDK imports at module evaluation time
+ * 
+ * NO IMPORTS OF @zama-fhe/relayer-sdk - even type imports can trigger webpack bundling
  */
 
-// Type-only import (safe for SSR - doesn't execute code)
-// @ts-ignore - TypeScript may not resolve this at build time, but it works at runtime
-import type { FhevmInstance } from "@zama-fhe/relayer-sdk";
+// Local type definition to avoid any SDK imports (prevents webpack from analyzing the SDK module)
+type FhevmInstance = any;
 
 export interface TwitterMetrics {
   follower_count: number;

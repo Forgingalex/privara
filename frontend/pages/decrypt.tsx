@@ -9,7 +9,7 @@ import { decryptResultDemo } from '../utils/encryption';
 export default function DecryptPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady } = useFHE();
+  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady, isInitialized } = useFHE();
   const [reputation, setReputation] = useState<ReputationVector | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,8 +137,8 @@ export default function DecryptPage() {
         <h1 style={{ color: 'white', fontSize: '2rem', marginBottom: '0.5rem', textAlign: 'center' }}>
           Your Reputation Vector
         </h1>
-        <p style={{ color: isDemoMode ? '#fbbf24' : '#22c55e', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
-          {isDemoMode ? '🎭 Demo Mode (Simulated Decryption)' : '🔐 Using Zama FHE Decryption'}
+        <p style={{ color: !isInitialized ? (fheLoading ? '#fbbf24' : '#ef4444') : isDemoMode ? '#fbbf24' : '#22c55e', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
+          {!isInitialized ? (fheLoading ? '⏳ Loading FHE...' : '⚠️ FHE SDK Not Ready') : isDemoMode ? '🎭 Demo Mode (Simulated Decryption)' : '🔐 Using Zama FHE Decryption'}
         </p>
 
         {/* Status Card */}

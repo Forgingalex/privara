@@ -40,7 +40,7 @@ const PRIVARA_ABI = [
 export default function SubmitPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady } = useFHE();
+  const { fheInstance, isLoading: fheLoading, error: fheError, isReady: fheReady, isInitialized } = useFHE();
   const [encryptedPayload, setEncryptedPayload] = useState<string>('');
   const [handles, setHandles] = useState<Uint8Array[]>([]);
   const [inputProof, setInputProof] = useState<Uint8Array | null>(null);

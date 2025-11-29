@@ -7,14 +7,17 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import type { FhevmInstance } from "@zama-fhe/relayer-sdk";
 import { createFhevmInstance } from '../utils/fhevmLoader';
+
+// Local type definition to avoid any SDK imports
+type FhevmInstance = any;
 
 interface FHEContextType {
   fheInstance: FhevmInstance | null;
   isLoading: boolean;
   error: string | null;
   isReady: boolean;
+  isInitialized: boolean; // Alias for isReady for compatibility
 }
 
 const FHEContext = createContext<FHEContextType>({
@@ -22,6 +25,7 @@ const FHEContext = createContext<FHEContextType>({
   isLoading: false,
   error: null,
   isReady: false,
+  isInitialized: false,
 });
 
 export const useFHE = () => {
@@ -31,6 +35,9 @@ export const useFHE = () => {
   }
   return context;
 };
+
+// Alias for compatibility
+export const useFHEContext = useFHE;
 
 interface FHEProviderProps {
   children: React.ReactNode;
@@ -125,11 +132,13 @@ export const FHEProvider: React.FC<FHEProviderProps> = ({ children }) => {
     };
   }, [fheInstance, error]);
 
+  const isInitialized = fheInstance !== null;
   const value: FHEContextType = {
     fheInstance,
     isLoading,
     error,
-    isReady: fheInstance !== null,
+    isReady: isInitialized,
+    isInitialized,
   };
 
   return <FHEContext.Provider value={value}>{children}</FHEContext.Provider>;

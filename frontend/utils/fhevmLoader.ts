@@ -2,9 +2,13 @@
  * FHEVM SDK Loader
  * Isolates SDK import to prevent SSR chunk evaluation issues
  * Based on fhedback architecture pattern
+ * 
+ * CRITICAL: No imports of @zama-fhe/relayer-sdk at top level
+ * All imports happen inside the function body
  */
 
-import type { FhevmInstance } from "@zama-fhe/relayer-sdk";
+// Type definition to avoid importing from SDK (prevents webpack analysis)
+type FhevmInstance = any;
 
 export const createFhevmInstance = async (): Promise<FhevmInstance | null> => {
   // Early return for SSR
