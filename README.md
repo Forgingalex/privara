@@ -226,6 +226,7 @@ This software is provided "as is" without warranty. Use at your own risk. This i
 
 ## Documentation
 
+- [User Guide and Technical Walkthrough](USER_GUIDE.md) - Complete walkthrough of Privara's architecture, user flow, FHE implementation, and technical details
 - [Contributing Guide](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 
