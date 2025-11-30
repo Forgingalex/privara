@@ -6,7 +6,8 @@ import type { AppProps } from 'next/app';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import '../styles/globals.css';
-import { FHEProvider } from '../context/FHEContext';
+// CRITICAL: FHEProvider is dynamically imported to prevent SSR analysis
+// Static import would cause Next.js to analyze the context module during SSR
 
 // Polyfill for 'global' variable in browser (needed for Zama FHE SDK)
 // Must run before any SDK code loads
@@ -63,6 +64,13 @@ const Providers = dynamic(() => import('../components/Providers'), {
     </div>
   ),
 });
+
+// CRITICAL: Dynamically import FHEProvider to prevent SSR analysis
+// This ensures the context module and its dependencies are never analyzed during server-side rendering
+const FHEProvider = dynamic(
+  () => import('../context/FHEContext').then(mod => ({ default: mod.FHEProvider })),
+  { ssr: false }
+);
 
 // Loading component for client-only pages
 const LoadingComponent = () => (

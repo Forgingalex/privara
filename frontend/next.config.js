@@ -57,13 +57,27 @@ const nextConfig = {
       })
     );
     
-    // CRITICAL: Ignore Zama FHE SDK during server-side builds
+    // CRITICAL: Ignore Zama FHE SDK and ALL transitive dependencies during server-side builds
     // The SDK accesses 'window' and cannot run in Node.js/SSR environment
     // Only bundle it for client-side code to prevent "window is not defined" errors
     if (isServer) {
+      // Comprehensive pattern matching SDK and all likely dependencies
       config.plugins.push(
         new (require('webpack').IgnorePlugin)({
-          resourceRegExp: /^@zama-fhe\/relayer-sdk/,
+          resourceRegExp: /^(?:@zama-fhe\/relayer-sdk|@zama-fhe|encrypted-types|@fhenix\/fhevmjs|fhevmjs)$/,
+        })
+      );
+      
+      // Additional safeguard: Ignore any file path containing SDK-related code
+      config.plugins.push(
+        new (require('webpack').IgnorePlugin)({
+          checkResource: (resource, context) => {
+            // Ignore if the resource path contains zama or fhevm
+            if (/[\\/]@zama-fhe[\\/]/.test(resource) || /[\\/]fhevm[\\/]/.test(resource)) {
+              return true;
+            }
+            return false;
+          },
         })
       );
     }

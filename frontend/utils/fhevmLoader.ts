@@ -11,8 +11,14 @@
 type FhevmInstance = any;
 
 export const createFhevmInstance = async (): Promise<FhevmInstance | null> => {
-  // Early return for SSR
-  if (typeof window === 'undefined') {
+  // STRICT: Multiple browser environment checks before any SDK code
+  // Early return for SSR - must be first check
+  if (typeof window === 'undefined' || typeof globalThis === 'undefined') {
+    return null;
+  }
+  
+  // Additional check: ensure we have a proper browser window object
+  if (!globalThis.window || !window.document) {
     return null;
   }
 
