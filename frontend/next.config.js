@@ -61,6 +61,23 @@ const nextConfig = {
     // The SDK accesses 'window' and cannot run in Node.js/SSR environment
     // Only bundle it for client-side code to prevent "window is not defined" errors
     if (isServer) {
+      const webpack = require('webpack');
+      
+      // CRITICAL: Use DefinePlugin to mock browser globals on the server
+      // This prevents any synchronous code from accessing window/document/navigator
+      // DefinePlugin does string replacement - use '(void 0)' to represent undefined
+      // which is safer than 'undefined' keyword in all contexts
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          // Replace browser globals with undefined on server
+          // '(void 0)' evaluates to undefined and is safe in all JavaScript contexts
+          'window': '(void 0)',
+          'document': '(void 0)',
+          'navigator': '(void 0)',
+          'self': '(void 0)',
+        })
+      );
+      
       // Mark SDK as external to prevent bundling entirely on server
       config.externals = config.externals || [];
       config.externals.push({
@@ -71,7 +88,7 @@ const nextConfig = {
       // Aggressive pattern matching SDK and all known problematic browser-only dependencies
       // This list targets transitives that might crash SSR
       config.plugins.push(
-        new (require('webpack').IgnorePlugin)({
+        new webpack.IgnorePlugin({
           resourceRegExp: /^(?:@zama-fhe\/relayer-sdk|@zama-fhe|encrypted-types|idb|@fhenix\/fhevmjs|@ethersproject\/abstract-provider|@ethersproject\/logger)$/,
           // Ensure the context for node_modules is covered
           contextRegExp: /node_modules/,
@@ -80,7 +97,7 @@ const nextConfig = {
       
       // Additional safeguard: Ignore any file path containing SDK-related code
       config.plugins.push(
-        new (require('webpack').IgnorePlugin)({
+        new webpack.IgnorePlugin({
           checkResource: (resource, context) => {
             // Ignore if the resource path contains zama or fhevm
             if (/[\\/]@zama-fhe[\\/]/.test(resource) || /[\\/]fhevm[\\/]/.test(resource)) {

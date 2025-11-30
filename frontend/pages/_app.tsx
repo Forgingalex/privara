@@ -9,8 +9,32 @@ import '../styles/globals.css';
 // CRITICAL: FHEProvider is dynamically imported to prevent SSR analysis
 // Static import would cause Next.js to analyze the context module during SSR
 
+// CRITICAL: Dynamically import FHEProvider FIRST to prevent any SSR analysis
+// This must be done before any other code that might reference the FHE stack
+const FHEProvider = dynamic(
+  () => import('../context/FHEContext').then(mod => ({ default: mod.FHEProvider })),
+  { ssr: false }
+);
+
+// Dynamically import providers to avoid SSR issues
+const Providers = dynamic(() => import('../components/Providers'), {
+  ssr: false,
+  loading: () => (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: 'white'
+    }}>
+      Loading...
+    </div>
+  ),
+});
+
 // Polyfill for 'global' variable in browser (needed for Zama FHE SDK)
-// Must run before any SDK code loads
+// Moved after dynamic imports - only runs in browser, not during SSR
 if (typeof window !== 'undefined') {
   // @ts-ignore - global is not defined in browser, we're adding it
   if (typeof global === 'undefined') {
@@ -47,30 +71,6 @@ if (typeof window !== 'undefined') {
     }
   }
 }
-
-// Dynamically import providers to avoid SSR issues
-const Providers = dynamic(() => import('../components/Providers'), {
-  ssr: false,
-  loading: () => (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'white'
-    }}>
-      Loading...
-    </div>
-  ),
-});
-
-// CRITICAL: Dynamically import FHEProvider to prevent SSR analysis
-// This ensures the context module and its dependencies are never analyzed during server-side rendering
-const FHEProvider = dynamic(
-  () => import('../context/FHEContext').then(mod => ({ default: mod.FHEProvider })),
-  { ssr: false }
-);
 
 // Loading component for client-only pages
 const LoadingComponent = () => (
