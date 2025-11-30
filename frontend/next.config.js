@@ -2,8 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   
-  // CRITICAL: Transpile Zama FHE SDK package (required for Next.js)
-  transpilePackages: ['@zama-fhe/relayer-sdk'],
+  // REMOVED: transpilePackages: ['@zama-fhe/relayer-sdk']
+  // This directive was conflicting with SSR exclusion logic by causing Next.js
+  // to analyze the SDK package before webpack plugins could exclude it.
+  // SDK isolation is now handled entirely through webpack configuration below.
   
   // Increase build timeout for pages with heavy dependencies
   staticPageGenerationTimeout: 180,
