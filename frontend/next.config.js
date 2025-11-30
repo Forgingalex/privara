@@ -61,10 +61,20 @@ const nextConfig = {
     // The SDK accesses 'window' and cannot run in Node.js/SSR environment
     // Only bundle it for client-side code to prevent "window is not defined" errors
     if (isServer) {
-      // Comprehensive pattern matching SDK and all likely dependencies
+      // Mark SDK as external to prevent bundling entirely on server
+      config.externals = config.externals || [];
+      config.externals.push({
+        '@zama-fhe/relayer-sdk': 'commonjs @zama-fhe/relayer-sdk',
+        '@zama-fhe/relayer-sdk/web': 'commonjs @zama-fhe/relayer-sdk/web',
+      });
+      
+      // Aggressive pattern matching SDK and all known problematic browser-only dependencies
+      // This list targets transitives that might crash SSR
       config.plugins.push(
         new (require('webpack').IgnorePlugin)({
-          resourceRegExp: /^(?:@zama-fhe\/relayer-sdk|@zama-fhe|encrypted-types|@fhenix\/fhevmjs|fhevmjs)$/,
+          resourceRegExp: /^(?:@zama-fhe\/relayer-sdk|@zama-fhe|encrypted-types|idb|@fhenix\/fhevmjs|@ethersproject\/abstract-provider|@ethersproject\/logger)$/,
+          // Ensure the context for node_modules is covered
+          contextRegExp: /node_modules/,
         })
       );
       
@@ -74,6 +84,10 @@ const nextConfig = {
           checkResource: (resource, context) => {
             // Ignore if the resource path contains zama or fhevm
             if (/[\\/]@zama-fhe[\\/]/.test(resource) || /[\\/]fhevm[\\/]/.test(resource)) {
+              return true;
+            }
+            // Also ignore idb (IndexedDB wrapper) and ethersproject modules that might pull in browser code
+            if (/[\\/]idb[\\/]/.test(resource) || /[\\/]@ethersproject[\\/]/.test(resource)) {
               return true;
             }
             return false;
