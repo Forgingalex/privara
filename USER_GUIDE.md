@@ -46,6 +46,12 @@ When users first visit Privara, they see the landing page which explains the ser
 
 The wallet connection serves two purposes. First, it provides the user's Ethereum address which is needed to associate encrypted data with a specific account on the blockchain. Second, the wallet will be used later to sign transactions when submitting encrypted data to the smart contract and to sign messages when requesting decryption of reputation results.
 
+<img width="1349" height="527" alt="image" src="https://github.com/user-attachments/assets/79e33d22-8526-4be6-a082-08e685065146" />
+
+
+<img width="1346" height="548" alt="Screenshot 2025-11-30 132750" src="https://github.com/user-attachments/assets/f0ae76e4-c65d-4290-bf9b-96f59a23c279" />
+
+
 ### Step Two: Twitter Connection and Metrics Loading
 
 After connecting a wallet, users can connect their Twitter account. In the current implementation, the application uses mock Twitter data for demonstration purposes. This allows testing and demonstration without requiring actual Twitter API credentials. The mock system generates realistic looking Twitter metrics including follower count, following count, engagement rate, account age, bot likelihood score, posting frequency, follower quality metric, and growth score.
@@ -53,6 +59,9 @@ After connecting a wallet, users can connect their Twitter account. In the curre
 When a user clicks the connect Twitter button, the application stores a flag in browser localStorage indicating the connection is active. The application then generates mock metrics that represent what real Twitter data would look like. These metrics are displayed on the page so users can see the data that will be encrypted.
 
 In a production version, this step would integrate with the Twitter API to fetch real metrics from a user's account. The API integration would retrieve follower counts, engagement statistics, account creation date, and other relevant metrics that feed into the reputation calculation.
+
+<img width="1347" height="445" alt="Screenshot 2025-11-30 132807" src="https://github.com/user-attachments/assets/c97acc08-d0a7-4746-af98-091d8b9fc974" />
+
 
 ### Step Three: Encrypting Twitter Metrics
 
@@ -66,6 +75,11 @@ The SDK creates an encrypted input object that contains multiple encrypted handl
 
 The encryption process produces an encrypted payload containing eight encrypted handles and one input proof. This payload is formatted as a hexadecimal string that can be stored and transmitted. The payload is stored in browser localStorage so it persists across page navigation. The application displays a truncated version of the encrypted payload to confirm encryption completed successfully.
 
+<img width="1347" height="626" alt="Screenshot 2025-11-30 132824" src="https://github.com/user-attachments/assets/ac562935-23ce-410e-aa87-255d90d8dfbb" />
+
+<img width="936" height="352" alt="Screenshot 2025-11-30 132927" src="https://github.com/user-attachments/assets/9f21e3a9-0eda-4875-88c4-9cf5814acfad" />
+
+
 ### Step Four: Submitting Encrypted Data to Smart Contract
 
 After encryption completes, users navigate to the submission page. This page displays the encrypted payload and provides a button to submit it to the Ethereum smart contract. When the user clicks submit, the application reads the encrypted handles and input proof from localStorage and formats them according to the contract's expected interface.
@@ -78,6 +92,12 @@ Once the transaction is confirmed, the smart contract stores the encrypted metri
 
 The submission page displays the transaction hash after successful submission. Users can click this hash to view the transaction on Etherscan, Sepolia's block explorer. This provides transparency and allows users to verify their data was stored correctly on the blockchain.
 
+<img width="936" height="567" alt="Screenshot 2025-11-30 132940" src="https://github.com/user-attachments/assets/5b8b67ae-7eb5-4a02-acb4-51d5779fe6c4" />
+
+<img width="956" height="601" alt="Screenshot 2025-11-30 133012" src="https://github.com/user-attachments/assets/7cac3bf1-5609-4c50-b360-f8010df69043" />
+
+<img width="891" height="253" alt="Screenshot 2025-11-30 133025" src="https://github.com/user-attachments/assets/172e910c-c35a-4117-835c-9f62b82fce38" />
+
 ### Step Five: Computing Reputation Scores
 
 After encrypted metrics are stored on the smart contract, reputation scores must be computed. The computation happens entirely on the smart contract using FHE operations. Users call the contract's computeReputation function which performs calculations on the stored encrypted metrics.
@@ -87,6 +107,11 @@ The contract computes five reputation scores: authenticity, influence, account h
 For the authenticity score, the contract performs the operation 100 minus bot likelihood. Both values are encrypted, so the subtraction happens in encrypted form. The result is an encrypted authenticity score. The contract stores this and the other four scores as encrypted values in its storage.
 
 When computation completes, the contract grants decryption permission to the user. This permission allows the user to decrypt their own reputation scores later. The permission is cryptographically tied to the user's address, so only they can decrypt their results even though the encrypted scores are stored publicly on the blockchain.
+
+
+<img width="1074" height="557" alt="Screenshot 2025-11-30 133051" src="https://github.com/user-attachments/assets/ae41b5d7-1851-418e-84dc-4c7ec118a451" />
+
+<img width="1066" height="317" alt="Screenshot 2025-11-30 133113" src="https://github.com/user-attachments/assets/e6bc36e4-18b9-4999-a9c3-c4191466e11a" />
 
 ### Step Six: Decrypting Reputation Results
 
@@ -99,6 +124,8 @@ Once signed, the application sends the encrypted scores and signature to the Zam
 The application receives the decrypted scores and displays them in a visual format. Each score is shown as a progress bar with a numerical value from 0 to 100. The scores are labeled with descriptions explaining what they represent. Authenticity measures how genuine the account appears based on bot likelihood. Influence measures the account's reach based on engagement rates. Account health combines posting frequency and follower quality metrics. Risk score indicates potential account issues. Momentum reflects growth trends.
 
 Only the user who owns the encrypted data can decrypt these scores. Even though the encrypted scores are stored on a public blockchain and visible to anyone, they remain encrypted until the user requests decryption with their private key. This maintains privacy while enabling verifiable reputation computation.
+
+<img width="1129" height="388" alt="Screenshot 2025-11-30 133132" src="https://github.com/user-attachments/assets/5486405f-6631-4e33-96e6-33d2047c1c87" />
 
 ## Smart Contract Implementation
 
