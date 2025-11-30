@@ -235,14 +235,98 @@ export async function decryptResult(
 }
 
 /**
- * Demo decrypt - throws error as mock encryption is removed
- * Real decryption must use decryptResult with FHE instance
+ * Demo encryption - generates mock encrypted data for demonstration
+ * Used when FHE SDK is not available as a fallback
+ */
+export async function encryptMetricsDemo(
+  metrics: TwitterMetrics,
+  userAddress: string,
+  contractAddress?: string
+): Promise<{ handles: Uint8Array[]; inputProof: Uint8Array; hexPayload: string }> {
+  console.log('🎭 Using demo encryption (FHE SDK not available)');
+  
+  const contractAddr = contractAddress || getContractAddress();
+  
+  // Scale metrics to integers (same as real encryption)
+  const scaledMetrics = {
+    follower_count: Math.floor(metrics.follower_count),
+    following_count: Math.floor(metrics.following_count),
+    engagement_rate: Math.round(metrics.engagement_rate * 100),
+    account_age_days: Math.floor(metrics.account_age_days),
+    bot_likelihood: Math.round(metrics.bot_likelihood * 100),
+    posting_frequency: Math.round(metrics.posting_frequency * 100),
+    follower_quality: Math.round(metrics.follower_quality * 100),
+    growth_score: Math.round(metrics.growth_score * 100),
+  };
+  
+  // Generate mock encrypted handles (32 bytes each, 8 handles)
+  const handles: Uint8Array[] = [];
+  for (let i = 0; i < 8; i++) {
+    const handle = new Uint8Array(32);
+    // Create deterministic "encryption" based on metric values for demo
+    const seed = Object.values(scaledMetrics)[i] || 0;
+    for (let j = 0; j < 32; j++) {
+      handle[j] = ((seed * (j + 1)) + i) % 256;
+    }
+    handles.push(handle);
+  }
+  
+  // Generate mock proof (128 bytes)
+  const inputProof = new Uint8Array(128);
+  const addrHash = userAddress.slice(2, 10); // Use address for seed
+  for (let i = 0; i < 128; i++) {
+    inputProof[i] = (parseInt(addrHash, 16) + i) % 256;
+  }
+  
+  // Create hex payload using existing function
+  const hexPayload = createHexPayload({ handles, inputProof });
+  
+  console.log('✓ Demo encryption complete');
+  console.log('   Handles:', handles.length);
+  console.log('   Payload size:', hexPayload.length, 'chars');
+  
+  return { handles, inputProof, hexPayload };
+}
+
+/**
+ * Demo decrypt - generates mock reputation vector for demonstration
+ * Used when FHE SDK is not available as a fallback
  */
 export async function decryptResultDemo(hexPayload: string): Promise<ReputationVector> {
-  throw new Error(
-    'Mock decryption is no longer available. This application requires real Zama FHE encryption. ' +
-    'Please use decryptResult with a valid FHE instance from FHEProvider.'
-  );
+  console.log('🎭 Using demo decryption (FHE SDK not available)');
+  
+  // Parse the hex payload to get metrics context
+  const { handles } = parseHexPayload(hexPayload);
+  
+  // Generate deterministic mock reputation based on handle data
+  // Simulate reputation calculation from encrypted metrics
+  let seed = 0;
+  if (handles.length > 0 && handles[0].length > 0) {
+    seed = handles[0][0] + handles[0][1] + handles[0][2];
+  }
+  
+  // Generate realistic-looking reputation scores
+  const authenticity = 65 + (seed % 20); // 65-85
+  const influence = 50 + ((seed * 2) % 30); // 50-80
+  const account_health = 70 + ((seed * 3) % 25); // 70-95
+  const risk_score = 10 + ((seed * 4) % 30); // 10-40 (lower is better)
+  const momentum = 55 + ((seed * 5) % 35); // 55-90
+  
+  const result: ReputationVector = {
+    authenticity: authenticity / 100,
+    influence: influence / 100,
+    account_health: account_health / 100,
+    risk_score: risk_score / 100,
+    momentum: momentum / 100,
+  };
+  
+  console.log('✓ Demo decryption complete');
+  console.log('   Reputation:', result);
+  
+  // Add small delay to simulate async operation
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  return result;
 }
 
 /**

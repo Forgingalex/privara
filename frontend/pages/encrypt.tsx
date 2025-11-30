@@ -3,7 +3,7 @@ import { useAccount } from 'wagmi';
 import { useRouter } from 'next/router';
 import { useFHE } from '../context/FHEContext';
 import type { TwitterMetrics } from '../utils/encryption';
-import { encryptMetrics, validateMetrics } from '../utils/encryption';
+import { encryptMetrics, encryptMetricsDemo, validateMetrics } from '../utils/encryption';
 import { generateMockTwitterMetrics } from '../utils/twitter';
 import Link from 'next/link';
 
@@ -46,8 +46,8 @@ export default function EncryptPage() {
   }, [isConnected, router, fheError]);
 
   const handleEncrypt = async () => {
-    if (!metrics || !address || !fheInstance) {
-      setError('FHE SDK not ready. Please wait for initialization or refresh the page.');
+    if (!metrics || !address) {
+      setError('Missing required data. Please ensure metrics are loaded and wallet is connected.');
       return;
     }
     
@@ -55,7 +55,16 @@ export default function EncryptPage() {
     setError(null);
     
     try {
-      const result = await encryptMetrics(fheInstance, metrics, address);
+      let result;
+      const isDemoMode = !fheInstance || !fheReady;
+      
+      if (isDemoMode) {
+        console.log('🎭 FHE SDK not ready, using demo encryption fallback');
+        result = await encryptMetricsDemo(metrics, address);
+      } else {
+        result = await encryptMetrics(fheInstance, metrics, address);
+      }
+      
       setEncryptedData(result.hexPayload);
       
       // Store encrypted data for contract submission
@@ -66,9 +75,10 @@ export default function EncryptPage() {
       localStorage.setItem('encryptedProof', JSON.stringify(
         Array.from(result.inputProof)
       ));
+      localStorage.setItem('isDemoMode', isDemoMode ? 'true' : 'false');
       
       console.log('✅ Encryption complete');
-      console.log('   Real FHE: true (via FHEProvider)');
+      console.log('   Demo mode:', isDemoMode);
       console.log('   Payload size:', result.hexPayload.length, 'chars');
     } catch (err: any) {
       setError(err.message || 'Encryption failed');
@@ -92,8 +102,8 @@ export default function EncryptPage() {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #FEDA15 0%, #0d1b2a 100%)', padding: '2rem' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto', paddingTop: '4rem' }}>
         <h1 style={{ color: 'white', fontSize: '2rem', marginBottom: '0.5rem', textAlign: 'center' }}>Encrypt Metrics</h1>
-        <p style={{ color: isInitialized ? '#22c55e' : fheLoading ? '#fbbf24' : '#ef4444', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
-          {!isInitialized ? (fheLoading ? '⏳ Loading FHE...' : '⚠️ FHE SDK Not Ready') : '🔐 Using Zama FHE (Real Encryption)'}
+        <p style={{ color: isInitialized ? '#22c55e' : fheLoading ? '#fbbf24' : '#fbbf24', textAlign: 'center', marginBottom: '2rem', fontSize: '0.875rem' }}>
+          {!isInitialized ? (fheLoading ? '⏳ Loading FHE...' : '🎭 Demo Mode Available (FHE SDK Not Ready)') : '🔐 Using Zama FHE (Real Encryption)'}
         </p>
         
         <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2rem', marginBottom: '1.5rem' }}>
@@ -127,21 +137,21 @@ export default function EncryptPage() {
 
           <button
             onClick={handleEncrypt}
-            disabled={loading || !!encryptedData || !fheReady || fheLoading}
+            disabled={loading || !!encryptedData}
             style={{
               width: '100%',
-              background: encryptedData ? '#6b7280' : (!fheReady || fheLoading) ? '#9ca3af' : '#FEDA15',
+              background: encryptedData ? '#6b7280' : '#FEDA15',
               color: '#000',
               borderRadius: '9999px',
               fontWeight: 'bold',
               padding: '14px 32px',
               fontSize: '16px',
               border: 'none',
-              cursor: (encryptedData || !fheReady || fheLoading) ? 'not-allowed' : 'pointer',
+              cursor: (encryptedData || loading) ? 'not-allowed' : 'pointer',
               marginBottom: '1rem'
             }}
           >
-            {fheLoading ? 'Initializing...' : loading ? 'Encrypting...' : encryptedData ? '✓ Done' : !fheReady ? 'Waiting for FHE SDK...' : 'Encrypt Metrics'}
+            {loading ? 'Encrypting...' : encryptedData ? '✓ Done' : (!fheReady ? 'Encrypt (Demo Mode)' : 'Encrypt Metrics')}
           </button>
 
           {encryptedData && (
