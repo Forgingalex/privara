@@ -2,6 +2,9 @@
 
 **The privacy-preserving reputation layer for social identity.**
 
+<img width="1343" height="339" alt="image" src="https://github.com/user-attachments/assets/4e658c53-e8b5-4c89-848f-46bf2814ee03" />
+
+
 Privara computes social reputation from encrypted Twitter data using Zama FHE, ensuring no raw analytics are ever exposed.
 
 ## Overview
